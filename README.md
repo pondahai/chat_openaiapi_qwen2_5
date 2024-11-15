@@ -9,3 +9,7 @@ https://huggingface.co/spaces/Qwen/Qwen2.5-Coder-Artifacts
 並且所有變數與內容都會存放在本機儲存庫  
 每次重新打開這這個網頁程式就會自動載入  
 目前只有一次存放機會  
+
+chat_openaiapi_qwen2_5.html  
+是最後完成版本  
+其他是過程中的半成品程式  
