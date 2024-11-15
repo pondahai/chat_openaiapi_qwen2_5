@@ -1,0 +1,1464 @@
+我要一個網頁程式 用來作為openai相容API的對話程式 畫面上有對話輸入框 有過往對話紀錄 有伺服器網址輸入 以及金鑰輸入 以及一個模型選擇的下拉選單 以及一個設定按鈕 當設定按鈕按下後 程式會將提取網址與金鑰 然後向伺服器索取模型列表 其結果放在下選單中
+
+對話使用流式輸出
+
+當使用者在對話文字輸入框中按下ENTER後 程式會根據 伺服器位址 金鑰 以及選擇的模型 將對話送給伺服器 然後從伺服器回傳的流式輸出會顯示在對話紀錄欄位
+
+
+html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI 相容 API 對話程式</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
+        #input-container { display: flex; }
+        #message-input { flex: 1; padding: 5px; margin-right: 5px; }
+        #send-button { padding: 5px 10px; }
+        #settings-container { margin-bottom: 10px; }
+        #model-select { margin-left: 5px; }
+    </style>
+</head>
+<body>
+    <div id="settings-container">
+        <input type="text" id="server-url" placeholder="伺服器網址" />
+        <input type="text" id="api-key" placeholder="API 金鑰" />
+        <select id="model-select">
+            <option value="">選擇模型</option>
+        </select>
+        <button onclick="fetchModels()">設定</button>
+    </div>
+    <div id="chat-container"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="if(event.key === 'Enter') sendMessage()" />
+        <button id="send-button" onclick="sendMessage()">送出</button>
+    </div>
+
+    <script>
+        async function fetchModels() {
+            const serverUrl = document.getElementById('server-url').value;
+            const apiKey = document.getElementById('api-key').value;
+            const response = await fetch(`${serverUrl}/models`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`
+                }
+            });
+            const data = await response.json();
+            const modelSelect = document.getElementById('model-select');
+            modelSelect.innerHTML = '<option value="">選擇模型</option>';
+            data.models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.name;
+                modelSelect.appendChild(option);
+            });
+        }
+
+        async function sendMessage() {
+            const serverUrl = document.getElementById('server-url').value;
+            const apiKey = document.getElementById('api-key').value;
+            const modelId = document.getElementById('model-select').value;
+            const messageInput = document.getElementById('message-input');
+            const userMessage = messageInput.value;
+
+            if (!userMessage || !serverUrl || !apiKey || !modelId) {
+                alert('請填寫所有必要的欄位。');
+                return;
+            }
+
+            appendMessage('user', userMessage);
+            messageInput.value = '';
+
+            const chatContainer = document.getElementById('chat-container');
+            const eventSource = new EventSource(`${serverUrl}/chat?model=${modelId}&message=${encodeURIComponent(userMessage)}`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`
+                }
+            });
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                appendMessage('assistant', data.message);
+            };
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                eventSource.close();
+            };
+        }
+
+        function appendMessage(sender, message) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${sender}: ${message}`;
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+
+按下設定按鈕後
+程式會根據網址與金鑰 向伺服器索取模型列表 然後動態餵給下拉選單
+
+
+html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI 相容 API 對話程式</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
+        #input-container { display: flex; }
+        #message-input { flex: 1; padding: 5px; margin-right: 5px; }
+        #send-button { padding: 5px 10px; }
+        #settings-container { margin-bottom: 10px; }
+        #model-select { margin-left: 5px; }
+    </style>
+</head>
+<body>
+    <div id="settings-container">
+        <input type="text" id="server-url" placeholder="伺服器網址" />
+        <input type="text" id="api-key" placeholder="API 金鑰" />
+        <select id="model-select">
+            <option value="">選擇模型</option>
+        </select>
+        <button onclick="fetchModels()">設定</button>
+    </div>
+    <div id="chat-container"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="if(event.key === 'Enter') sendMessage()" />
+        <button id="send-button" onclick="sendMessage()">送出</button>
+    </div>
+
+    <script>
+        async function fetchModels() {
+            const serverUrl = document.getElementById('server-url').value;
+            const apiKey = document.getElementById('api-key').value;
+            try {
+                const response = await fetch(`${serverUrl}/models`, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                const modelSelect = document.getElementById('model-select');
+                modelSelect.innerHTML = '<option value="">選擇模型</option>';
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    modelSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('無法取得模型列表:', error);
+                alert('無法取得模型列表，請檢查伺服器網址和API金鑰。');
+            }
+        }
+
+        async function sendMessage() {
+            const serverUrl = document.getElementById('server-url').value;
+            const apiKey = document.getElementById('api-key').value;
+            const modelId = document.getElementById('model-select').value;
+            const messageInput = document.getElementById('message-input');
+            const userMessage = messageInput.value;
+
+            if (!userMessage || !serverUrl || !apiKey || !modelId) {
+                alert('請填寫所有必要的欄位。');
+                return;
+            }
+
+            appendMessage('user', userMessage);
+            messageInput.value = '';
+
+            const chatContainer = document.getElementById('chat-container');
+            const eventSource = new EventSource(`${serverUrl}/chat?model=${modelId}&message=${encodeURIComponent(userMessage)}`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`
+                }
+            });
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                appendMessage('assistant', data.message);
+            };
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                eventSource.close();
+            };
+        }
+
+        function appendMessage(sender, message) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${sender}: ${message}`;
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+
+伺服器網址字串尾端需要自動加上"/v1"
+另外按下設定按鈕的時候 必須每次都重新抓取網址與金鑰輸入框的內容
+
+
+html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI 相容 API 對話程式</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
+        #input-container { display: flex; }
+        #message-input { flex: 1; padding: 5px; margin-right: 5px; }
+        #send-button { padding: 5px 10px; }
+        #settings-container { margin-bottom: 10px; }
+        #model-select { margin-left: 5px; }
+    </style>
+</head>
+<body>
+    <div id="settings-container">
+        <input type="text" id="server-url" placeholder="伺服器網址" />
+        <input type="text" id="api-key" placeholder="API 金鑰" />
+        <select id="model-select">
+            <option value="">選擇模型</option>
+        </select>
+        <button onclick="fetchModels()">設定</button>
+    </div>
+    <div id="chat-container"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="if(event.key === 'Enter') sendMessage()" />
+        <button id="send-button" onclick="sendMessage()">送出</button>
+    </div>
+
+    <script>
+        async function fetchModels() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+
+            if (!serverUrl || !apiKey) {
+                alert('請填寫伺服器網址和API金鑰。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            try {
+                const response = await fetch(`${serverUrl}/models`, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                const modelSelect = document.getElementById('model-select');
+                modelSelect.innerHTML = '<option value="">選擇模型</option>';
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    modelSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('無法取得模型列表:', error);
+                alert('無法取得模型列表，請檢查伺服器網址和API金鑰。');
+            }
+        }
+
+        async function sendMessage() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+            const modelId = document.getElementById('model-select').value;
+            const messageInput = document.getElementById('message-input');
+            const userMessage = messageInput.value.trim();
+
+            if (!userMessage || !serverUrl || !apiKey || !modelId) {
+                alert('請填寫所有必要的欄位。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            appendMessage('user', userMessage);
+            messageInput.value = '';
+
+            const chatContainer = document.getElementById('chat-container');
+            const eventSource = new EventSource(`${serverUrl}/chat?model=${modelId}&message=${encodeURIComponent(userMessage)}`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`
+                }
+            });
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                appendMessage('assistant', data.message);
+            };
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                eventSource.close();
+            };
+        }
+
+        function appendMessage(sender, message) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${sender}: ${message}`;
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+
+在設定按鈕按下之後的錯誤訊息alert中加上顯示程式目前看到的網址與金鑰
+
+
+html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI 相容 API 對話程式</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
+        #input-container { display: flex; }
+        #message-input { flex: 1; padding: 5px; margin-right: 5px; }
+        #send-button { padding: 5px 10px; }
+        #settings-container { margin-bottom: 10px; }
+        #model-select { margin-left: 5px; }
+    </style>
+</head>
+<body>
+    <div id="settings-container">
+        <input type="text" id="server-url" placeholder="伺服器網址" />
+        <input type="text" id="api-key" placeholder="API 金鑰" />
+        <select id="model-select">
+            <option value="">選擇模型</option>
+        </select>
+        <button onclick="fetchModels()">設定</button>
+    </div>
+    <div id="chat-container"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="if(event.key === 'Enter') sendMessage()" />
+        <button id="send-button" onclick="sendMessage()">送出</button>
+    </div>
+
+    <script>
+        async function fetchModels() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+
+            if (!serverUrl || !apiKey) {
+                alert('請填寫伺服器網址和API金鑰。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            try {
+                const response = await fetch(`${serverUrl}/models`, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                const modelSelect = document.getElementById('model-select');
+                modelSelect.innerHTML = '<option value="">選擇模型</option>';
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    modelSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('無法取得模型列表:', error);
+                alert(`無法取得模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。`);
+            }
+        }
+
+        async function sendMessage() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+            const modelId = document.getElementById('model-select').value;
+            const messageInput = document.getElementById('message-input');
+            const userMessage = messageInput.value.trim();
+
+            if (!userMessage || !serverUrl || !apiKey || !modelId) {
+                alert('請填寫所有必要的欄位。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            appendMessage('user', userMessage);
+            messageInput.value = '';
+
+            const chatContainer = document.getElementById('chat-container');
+            const eventSource = new EventSource(`${serverUrl}/chat?model=${modelId}&message=${encodeURIComponent(userMessage)}`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`
+                }
+            });
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                appendMessage('assistant', data.message);
+            };
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                eventSource.close();
+                alert(`通訊錯誤，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。`);
+            };
+        }
+
+        function appendMessage(sender, message) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${sender}: ${message}`;
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+
+在設定按鈕按下之後的錯誤訊息alert中加上顯示目前遇到的伺服器錯誤訊息
+
+
+html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI 相容 API 對話程式</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
+        #input-container { display: flex; }
+        #message-input { flex: 1; padding: 5px; margin-right: 5px; }
+        #send-button { padding: 5px 10px; }
+        #settings-container { margin-bottom: 10px; }
+        #model-select { margin-left: 5px; }
+    </style>
+</head>
+<body>
+    <div id="settings-container">
+        <input type="text" id="server-url" placeholder="伺服器網址" />
+        <input type="text" id="api-key" placeholder="API 金鑰" />
+        <select id="model-select">
+            <option value="">選擇模型</option>
+        </select>
+        <button onclick="fetchModels()">設定</button>
+    </div>
+    <div id="chat-container"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="if(event.key === 'Enter') sendMessage()" />
+        <button id="send-button" onclick="sendMessage()">送出</button>
+    </div>
+
+    <script>
+        async function fetchModels() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+
+            if (!serverUrl || !apiKey) {
+                alert('請填寫伺服器網址和API金鑰。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            try {
+                const response = await fetch(`${serverUrl}/models`, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+                const data = await response.json();
+                const modelSelect = document.getElementById('model-select');
+                modelSelect.innerHTML = '<option value="">選擇模型</option>';
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    modelSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('無法取得模型列表:', error);
+                alert(`無法取得模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            }
+        }
+
+        async function sendMessage() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+            const modelId = document.getElementById('model-select').value;
+            const messageInput = document.getElementById('message-input');
+            const userMessage = messageInput.value.trim();
+
+            if (!userMessage || !serverUrl || !apiKey || !modelId) {
+                alert('請填寫所有必要的欄位。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            appendMessage('user', userMessage);
+            messageInput.value = '';
+
+            const chatContainer = document.getElementById('chat-container');
+            const eventSource = new EventSource(`${serverUrl}/chat?model=${modelId}&message=${encodeURIComponent(userMessage)}`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`
+                }
+            });
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                appendMessage('assistant', data.message);
+            };
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                eventSource.close();
+                alert(`通訊錯誤，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${err.message}`);
+            };
+        }
+
+        function appendMessage(sender, message) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${sender}: ${message}`;
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+
+將設定按鈕的名字改為取得模型
+
+用console列出取得模型的回應內容
+
+
+html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI 相容 API 對話程式</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
+        #input-container { display: flex; }
+        #message-input { flex: 1; padding: 5px; margin-right: 5px; }
+        #send-button { padding: 5px 10px; }
+        #settings-container { margin-bottom: 10px; }
+        #model-select { margin-left: 5px; }
+    </style>
+</head>
+<body>
+    <div id="settings-container">
+        <input type="text" id="server-url" placeholder="伺服器網址" />
+        <input type="text" id="api-key" placeholder="API 金鑰" />
+        <select id="model-select">
+            <option value="">選擇模型</option>
+        </select>
+        <button onclick="fetchModels()">取得模型</button>
+    </div>
+    <div id="chat-container"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="if(event.key === 'Enter') sendMessage()" />
+        <button id="send-button" onclick="sendMessage()">送出</button>
+    </div>
+
+    <script>
+        async function fetchModels() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+
+            if (!serverUrl || !apiKey) {
+                alert('請填寫伺服器網址和API金鑰。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            try {
+                const response = await fetch(`${serverUrl}/models`, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+                const data = await response.json();
+                console.log('取得模型的回應內容:', data); // Log the response to the console
+                const modelSelect = document.getElementById('model-select');
+                modelSelect.innerHTML = '<option value="">選擇模型</option>';
+                data.models.forEach(model => {
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    modelSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('無法取得模型列表:', error);
+                alert(`無法取得模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            }
+        }
+
+        async function sendMessage() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+            const modelId = document.getElementById('model-select').value;
+            const messageInput = document.getElementById('message-input');
+            const userMessage = messageInput.value.trim();
+
+            if (!userMessage || !serverUrl || !apiKey || !modelId) {
+                alert('請填寫所有必要的欄位。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            appendMessage('user', userMessage);
+            messageInput.value = '';
+
+            const chatContainer = document.getElementById('chat-container');
+            const eventSource = new EventSource(`${serverUrl}/chat?model=${modelId}&message=${encodeURIComponent(userMessage)}`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`
+                }
+            });
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                appendMessage('assistant', data.message);
+            };
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                eventSource.close();
+                alert(`通訊錯誤，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${err.message}`);
+            };
+        }
+
+        function appendMessage(sender, message) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${sender}: ${message}`;
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+
+目前程式回應無法取得列表
+實際情況是
+伺服器有回應
+{object: 'list', data: Array(20)}
+但是程式解析的forEach有錯誤
+TypeError: Cannot read properties of undefined (reading 'forEach')
+
+
+根據你提供的資訊，伺服器回應的格式是 {object: 'list', data: Array(20)}，而程式嘗試直接對 data.models 進行迭代，這導致了 TypeError 因為 data.models 是未定義的。
+
+我們需要修改程式碼以正確地迭代 data 陣列。以下是修正後的程式碼：
+
+html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI 相容 API 對話程式</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
+        #input-container { display: flex; }
+        #message-input { flex: 1; padding: 5px; margin-right: 5px; }
+        #send-button { padding: 5px 10px; }
+        #settings-container { margin-bottom: 10px; }
+        #model-select { margin-left: 5px; }
+    </style>
+</head>
+<body>
+    <div id="settings-container">
+        <input type="text" id="server-url" placeholder="伺服器網址" />
+        <input type="text" id="api-key" placeholder="API 金鑰" />
+        <select id="model-select">
+            <option value="">選擇模型</option>
+        </select>
+        <button onclick="fetchModels()">取得模型</button>
+    </div>
+    <div id="chat-container"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="if(event.key === 'Enter') sendMessage()" />
+        <button id="send-button" onclick="sendMessage()">送出</button>
+    </div>
+
+    <script>
+        async function fetchModels() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+
+            if (!serverUrl || !apiKey) {
+                alert('請填寫伺服器網址和API金鑰。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            try {
+                const response = await fetch(`${serverUrl}/models`, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+                const data = await response.json();
+                console.log('取得模型的回應內容:', data); // Log the response to the console
+                const modelSelect = document.getElementById('model-select');
+                modelSelect.innerHTML = '<option value="">選擇模型</option>';
+                data.data.forEach(model => { // Corrected to iterate over data.data
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.name;
+                    modelSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('無法取得模型列表:', error);
+                alert(`無法取得模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            }
+        }
+
+        async function sendMessage() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+            const modelId = document.getElementById('model-select').value;
+            const messageInput = document.getElementById('message-input');
+            const userMessage = messageInput.value.trim();
+
+            if (!userMessage || !serverUrl || !apiKey || !modelId) {
+                alert('請填寫所有必要的欄位。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            appendMessage('user', userMessage);
+            messageInput.value = '';
+
+            const chatContainer = document.getElementById('chat-container');
+            const eventSource = new EventSource(`${serverUrl}/chat?model=${modelId}&message=${encodeURIComponent(userMessage)}`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`
+                }
+            });
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                appendMessage('assistant', data.message);
+            };
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                eventSource.close();
+                alert(`通訊錯誤，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${err.message}`);
+            };
+        }
+
+        function appendMessage(sender, message) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${sender}: ${message}`;
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+這段程式碼已經修正了 forEach 迭代的部分，確保它正確地從 data.data 中提取模型列表。請確認伺服器的回應格式並測試此程式碼。
+
+
+目前沒有錯誤
+但是下拉選單是空的
+我從後台查詢收到的資料格式:
+{
+"object": "list",
+"data": [
+{
+"id": "whisper-large-v3",
+"object": "model",
+"created": 1693721698,
+"owned_by": "OpenAI",
+"active": true,
+"context_window": 448,
+"public_apps": null
+},
+{
+"id": "whisper-large-v3-turbo",
+"object": "model",
+"created": 1728413088,
+"owned_by": "OpenAI",
+"active": true,
+"context_window": 448,
+"public_apps": null
+},
+{
+"id": "distil-whisper-large-v3-en",
+"object": "model",
+"created": 1693721698,
+"owned_by": "Hugging Face",
+"active": true,
+"context_window": 448,
+"public_apps": null
+},
+{
+"id": "llama3-groq-70b-8192-tool-use-preview",
+"object": "model",
+"created": 1693721698,
+"owned_by": "Groq",
+"active": true,
+"context_window": 8192,
+"public_apps": null
+},
+{
+"id": "llama-3.2-11b-text-preview",
+"object": "model",
+"created": 1727283005,
+"owned_by": "Meta",
+"active": true,
+"context_window": 8192,
+"public_apps": null
+},
+{
+"id": "llama-3.2-90b-text-preview",
+"object": "model",
+"created": 1727285716,
+"owned_by": "Meta",
+"active": true,
+"context_window": 8192,
+"public_apps": null
+},
+{
+"id": "llama-3.1-8b-instant",
+"object": "model",
+"created": 1693721698,
+"owned_by": "Meta",
+"active": true,
+"context_window": 131072,
+"public_apps": null
+},
+{
+"id": "llama-3.2-3b-preview",
+"object": "model",
+"created": 1727224290,
+"owned_by": "Meta",
+"active": true,
+"context_window": 8192,
+"public_apps": null
+},
+{
+"id": "llama-3.2-90b-vision-preview",
+"object": "model",
+"created": 1727226914,
+"owned_by": "Meta",
+"active": true,
+"context_window": 8192,
+"public_apps": null
+},
+{
+"id": "llama3-70b-8192",
+"object": "model",
+"created": 1693721698,
+"owned_by": "Meta",
+"active": true,
+"context_window": 8192,
+"public_apps": null
+},
+{
+"id": "llama-3.1-70b-versatile",
+"object": "model",
+"created": 1693721698,
+"owned_by": "Meta",
+"active": true,
+"context_window": 32768,
+"public_apps": null
+},
+{
+"id": "llama-3.2-1b-preview",
+"object": "model",
+"created": 1727224268,
+"owned_by": "Meta",
+"active": true,
+"context_window": 8192,
+"public_apps": null
+},
+{
+"id": "llama-guard-3-8b",
+"object": "model",
+"created": 1693721698,
+"owned_by": "Meta",
+"active": true,
+"context_window": 8192,
+"public_apps": null
+},
+{
+"id": "gemma2-9b-it",
+"object": "model",
+"created": 1693721698,
+"owned_by": "Google",
+"active": true,
+"context_window": 8192,
+"public_apps": null
+},
+{
+"id": "llama-3.2-11b-vision-preview",
+"object": "model",
+"created": 1727226869,
+"owned_by": "Meta",
+"active": true,
+"context_window": 8192,
+"public_apps": null
+},
+{
+"id": "llama3-8b-8192",
+"object": "model",
+"created": 1693721698,
+"owned_by": "Meta",
+"active": true,
+"context_window": 8192,
+"public_apps": null
+},
+{
+"id": "llama3-groq-8b-8192-tool-use-preview",
+"object": "model",
+"created": 1693721698,
+"owned_by": "Groq",
+"active": true,
+"context_window": 8192,
+"public_apps": null
+},
+{
+"id": "llava-v1.5-7b-4096-preview",
+"object": "model",
+"created": 1725402373,
+"owned_by": "Other",
+"active": true,
+"context_window": 4096,
+"public_apps": null
+},
+{
+"id": "gemma-7b-it",
+"object": "model",
+"created": 1693721698,
+"owned_by": "Google",
+"active": true,
+"context_window": 8192,
+"public_apps": null
+},
+{
+"id": "mixtral-8x7b-32768",
+"object": "model",
+"created": 1693721698,
+"owned_by": "Mistral AI",
+"active": true,
+"context_window": 32768,
+"public_apps": null
+}
+]
+}
+
+
+根據你提供的伺服器回應格式，我們需要確保在填充下拉選單時使用正確的屬性。從你的資料中可以看到，每個模型的 id 和 name 屬性分別是 id 和 id（因為 name 屬性並不存在，我們將使用 id 作為顯示名稱）。
+
+以下是修正後的程式碼，確保下拉選單正確填充：
+
+html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI 相容 API 對話程式</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
+        #input-container { display: flex; }
+        #message-input { flex: 1; padding: 5px; margin-right: 5px; }
+        #send-button { padding: 5px 10px; }
+        #settings-container { margin-bottom: 10px; }
+        #model-select { margin-left: 5px; }
+    </style>
+</head>
+<body>
+    <div id="settings-container">
+        <input type="text" id="server-url" placeholder="伺服器網址" />
+        <input type="text" id="api-key" placeholder="API 金鑰" />
+        <select id="model-select">
+            <option value="">選擇模型</option>
+        </select>
+        <button onclick="fetchModels()">取得模型</button>
+    </div>
+    <div id="chat-container"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="if(event.key === 'Enter') sendMessage()" />
+        <button id="send-button" onclick="sendMessage()">送出</button>
+    </div>
+
+    <script>
+        async function fetchModels() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+
+            if (!serverUrl || !apiKey) {
+                alert('請填寫伺服器網址和API金鑰。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            try {
+                const response = await fetch(`${serverUrl}/models`, {
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+                const data = await response.json();
+                console.log('取得模型的回應內容:', data); // Log the response to the console
+                const modelSelect = document.getElementById('model-select');
+                modelSelect.innerHTML = '<option value="">選擇模型</option>';
+                data.data.forEach(model => { // Corrected to iterate over data.data
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.id; // Use model.id as the display name
+                    modelSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('無法取得模型列表:', error);
+                alert(`無法取得模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            }
+        }
+
+        async function sendMessage() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+            const modelId = document.getElementById('model-select').value;
+            const messageInput = document.getElementById('message-input');
+            const userMessage = messageInput.value.trim();
+
+            if (!userMessage || !serverUrl || !apiKey || !modelId) {
+                alert('請填寫所有必要的欄位。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            appendMessage('user', userMessage);
+            messageInput.value = '';
+
+            const chatContainer = document.getElementById('chat-container');
+            const eventSource = new EventSource(`${serverUrl}/chat?model=${modelId}&message=${encodeURIComponent(userMessage)}`, {
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`
+                }
+            });
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                appendMessage('assistant', data.message);
+            };
+
+            eventSource.onerror = function(err) {
+                console.error("EventSource failed:", err);
+                eventSource.close();
+                alert(`通訊錯誤，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${err.message}`);
+            };
+        }
+
+        function appendMessage(sender, message) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${sender}: ${message}`;
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+這段程式碼已經修正了下拉選單填充的部分，確保它正確地從 data.data 中提取模型列表並使用 model.id 作為顯示名稱。請測試此程式碼，確認下拉選單是否正確填充。
+
+
+與大語言的API溝通方式請改為POST方法
+
+
+好的，我們將與大語言模型的API溝通方式從GET方法改為POST方法。以下是更新後的程式碼：
+
+html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI 相容 API 對話程式</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
+        #input-container { display: flex; }
+        #message-input { flex: 1; padding: 5px; margin-right: 5px; }
+        #send-button { padding: 5px 10px; }
+        #settings-container { margin-bottom: 10px; }
+        #model-select { margin-left: 5px; }
+    </style>
+</head>
+<body>
+    <div id="settings-container">
+        <input type="text" id="server-url" placeholder="伺服器網址" />
+        <input type="text" id="api-key" placeholder="API 金鑰" />
+        <select id="model-select">
+            <option value="">選擇模型</option>
+        </select>
+        <button onclick="fetchModels()">取得模型</button>
+    </div>
+    <div id="chat-container"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="if(event.key === 'Enter') sendMessage()" />
+        <button id="send-button" onclick="sendMessage()">送出</button>
+    </div>
+
+    <script>
+        async function fetchModels() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+
+            if (!serverUrl || !apiKey) {
+                alert('請填寫伺服器網址和API金鑰。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            try {
+                const response = await fetch(`${serverUrl}/models`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+                const data = await response.json();
+                console.log('取得模型的回應內容:', data); // Log the response to the console
+                const modelSelect = document.getElementById('model-select');
+                modelSelect.innerHTML = '<option value="">選擇模型</option>';
+                data.data.forEach(model => { // Corrected to iterate over data.data
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.id; // Use model.id as the display name
+                    modelSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('無法取得模型列表:', error);
+                alert(`無法取得模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            }
+        }
+
+        async function sendMessage() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+            const modelId = document.getElementById('model-select').value;
+            const messageInput = document.getElementById('message-input');
+            const userMessage = messageInput.value.trim();
+
+            if (!userMessage || !serverUrl || !apiKey || !modelId) {
+                alert('請填寫所有必要的欄位。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            appendMessage('user', userMessage);
+            messageInput.value = '';
+
+            try {
+                const response = await fetch(`${serverUrl}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: modelId,
+                        message: userMessage
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+
+                const data = await response.json();
+                appendMessage('assistant', data.message);
+            } catch (error) {
+                console.error('通訊錯誤:', error);
+                alert(`通訊錯誤，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            }
+        }
+
+        function appendMessage(sender, message) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${sender}: ${message}`;
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+主要變更點：
+fetchModels 函數：仍然使用 GET 方法來取得模型列表。
+sendMessage 函數：將與大語言模型的API溝通方式從 EventSource 改為 POST 方法，並在請求體中包含 model 和 message。
+這樣的修改應該可以確保程式正確地使用 POST 方法與伺服器進行通信。請測試此程式碼，確認其功能是否符合預期。
+
+
+首先 API網址後面是 /chat/completions
+
+接著傳遞給伺服器的JSON長這樣
+{
+"model": "llama3-8b-8192",
+"messages": [{
+"role": "user",
+"content": "Explain the importance of fast language models"
+}]
+}
+其中model就是我們選擇的model
+對話內容放在content之中
+
+
+好的，根據你的要求，我們需要將 sendMessage 函數中的 API 網址改為 /chat/completions，並且傳遞的 JSON 格式需要符合你提供的範例。以下是更新後的程式碼：
+
+html
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI 相容 API 對話程式</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
+        #input-container { display: flex; }
+        #message-input { flex: 1; padding: 5px; margin-right: 5px; }
+        #send-button { padding: 5px 10px; }
+        #settings-container { margin-bottom: 10px; }
+        #model-select { margin-left: 5px; }
+    </style>
+</head>
+<body>
+    <div id="settings-container">
+        <input type="text" id="server-url" placeholder="伺服器網址" />
+        <input type="text" id="api-key" placeholder="API 金鑰" />
+        <select id="model-select">
+            <option value="">選擇模型</option>
+        </select>
+        <button onclick="fetchModels()">取得模型</button>
+    </div>
+    <div id="chat-container"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="if(event.key === 'Enter') sendMessage()" />
+        <button id="send-button" onclick="sendMessage()">送出</button>
+    </div>
+
+    <script>
+        async function fetchModels() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+
+            if (!serverUrl || !apiKey) {
+                alert('請填寫伺服器網址和API金鑰。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            try {
+                const response = await fetch(`${serverUrl}/models`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+                const data = await response.json();
+                console.log('取得模型的回應內容:', data); // Log the response to the console
+                const modelSelect = document.getElementById('model-select');
+                modelSelect.innerHTML = '<option value="">選擇模型</option>';
+                data.data.forEach(model => { // Corrected to iterate over data.data
+                    const option = document.createElement('option');
+                    option.value = model.id;
+                    option.textContent = model.id; // Use model.id as the display name
+                    modelSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error('無法取得模型列表:', error);
+                alert(`無法取得模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            }
+        }
+
+        async function sendMessage() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+            const modelId = document.getElementById('model-select').value;
+            const messageInput = document.getElementById('message-input');
+            const userMessage = messageInput.value.trim();
+
+            if (!userMessage || !serverUrl || !apiKey || !modelId) {
+                alert('請填寫所有必要的欄位。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1"
+            if (!serverUrl.endsWith('/v1')) {
+                serverUrl += '/v1';
+            }
+
+            appendMessage('user', userMessage);
+            messageInput.value = '';
+
+            try {
+                const response = await fetch(`${serverUrl}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: modelId,
+                        messages: [{
+                            role: "user",
+                            content: userMessage
+                        }]
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+
+                const data = await response.json();
+                appendMessage('assistant', data.choices[0].message.content);
+            } catch (error) {
+                console.error('通訊錯誤:', error);
+                alert(`通訊錯誤，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            }
+        }
+
+        function appendMessage(sender, message) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageElement = document.createElement('div');
+            messageElement.textContent = `${sender}: ${message}`;
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+    </script>
+</body>
+</html>
+主要變更點：
+sendMessage 函數：
+將 API 網址改為 /chat/completions。
+傳遞的 JSON 格式符合你提供的範例，包含 model 和 messages 陣列。
+從伺服器回應中提取 data.choices[0].message.content 作為助手的回覆。
+這樣的修改應該可以確保程式正確地使用 POST 方法與伺服器進行通信，並正確處理對話內容。請測試此程式碼，確認其功能是否符合預期。
