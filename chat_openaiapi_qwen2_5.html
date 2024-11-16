@@ -37,6 +37,7 @@
 </head>
 <body>
     <div id="settings-container">
+        <button onclick="startNewChat()">新對話</button>
         <input type="text" id="server-url" placeholder="伺服器網址" />
         <input type="text" id="api-key" placeholder="API 金鑰" />
         <select id="model-select" onchange="saveSelectedModel()">
@@ -76,6 +77,16 @@
                 appendMessage(sender, message);
             });
         });
+
+        function startNewChat() {
+            // Clear chat history
+            chatHistory = [];
+            localStorage.removeItem('chatHistory');
+
+            // Clear chat container
+            const chatContainer = document.getElementById('chat-container');
+            chatContainer.innerHTML = '';
+        }
 
         async function fetchModels() {
             let serverUrl = document.getElementById('server-url').value.trim();
@@ -161,7 +172,8 @@
                 console.log('Sending message to:', requestUrl); // Log the request URL
                 console.log('Message payload:', {
                     model: modelId,
-                    messages: chatHistory.map(([role, content]) => ({ role, content }))
+                    messages: chatHistory.map(([role, content]) => ({ role, content })),
+                    stream: true
                 }); // Log the message payload
 
                 const response = await fetch(`${requestUrl}/chat/completions`, {
@@ -172,7 +184,8 @@
                     },
                     body: JSON.stringify({
                         model: modelId,
-                        messages: chatHistory.map(([role, content]) => ({ role, content }))
+                        messages: chatHistory.map(([role, content]) => ({ role, content })),
+                        stream: true
                     })
                 });
 
@@ -181,15 +194,53 @@
                     throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
                 }
 
-                const data = await response.json();
-                const assistantMessage = data.choices[0].message.content;
-                appendMessage('assistant', assistantMessage);
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let partialLine = '';
+                let assistantMessage = '';
+                let assistantMessageElement = null;
 
-                // Append assistant message to chat history
-                chatHistory.push(['assistant', assistantMessage]);
-                localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
 
-                localStorage.setItem('selectedModel', modelId); // Save selected model to localStorage
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = (partialLine + chunk).split('\n');
+                    partialLine = lines.pop(); // Keep the last partial line for the next iteration
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.substring(6);
+                            if (data === '[DONE]') {
+                                break;
+                            }
+                            const parsedData = JSON.parse(data);
+                            const deltaContent = parsedData.choices[0].delta.content;
+                            if (deltaContent) {
+                                assistantMessage += deltaContent;
+
+                                if (!assistantMessageElement) {
+                                    assistantMessageElement = appendMessage('assistant', '');
+                                }
+
+                                assistantMessageElement.innerHTML = `<strong>assistant:</strong> ${marked.parse(assistantMessage)}`;
+
+                                // Find all code elements and add copy button
+                                const codeElements = assistantMessageElement.querySelectorAll('code');
+                                codeElements.forEach(codeElement => {
+                                    const copyButton = document.createElement('button');
+                                    copyButton.className = 'copy-button';
+                                    copyButton.textContent = '⎘';
+                                    copyButton.onclick = () => copyCode(codeElement);
+                                    codeElement.appendChild(copyButton);
+                                });
+
+                                chatHistory[chatHistory.length - 1][1] = assistantMessage;
+                                localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+                            }
+                        }
+                    }
+                }
             } catch (error) {
                 console.error('通訊錯誤:', error);
                 alert(`通訊錯誤，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
@@ -213,6 +264,8 @@
 
             chatContainer.appendChild(messageElement);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            return messageElement;
         }
 
         function copyCode(codeElement) {
