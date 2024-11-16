@@ -221,6 +221,8 @@
 
                                 if (!assistantMessageElement) {
                                     assistantMessageElement = appendMessage('assistant', '');
+                                    chatHistory.push(['assistant', '']); // Add placeholder for assistant message
+                                    localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
                                 }
 
                                 assistantMessageElement.innerHTML = `<strong>assistant:</strong> ${marked.parse(assistantMessage)}`;
@@ -235,6 +237,7 @@
                                     codeElement.appendChild(copyButton);
                                 });
 
+                                // Update the last assistant message in chat history
                                 chatHistory[chatHistory.length - 1][1] = assistantMessage;
                                 localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
                             }
