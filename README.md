@@ -3,7 +3,7 @@
 
 這個程式是我在hunggingface上面使用千問2.5  
 https://huggingface.co/spaces/Qwen/Qwen2.5-Coder-Artifacts  
-以對話方式生成的程式碼  
+以對話方式生成的AI聊天表皮程式 
 這個程式透過設定API網址與金鑰  
 可以與大語言模型進行對話  
 並且所有變數與內容都會存放在本機儲存庫  
