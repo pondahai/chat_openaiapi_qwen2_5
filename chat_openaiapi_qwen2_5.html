@@ -5,11 +5,16 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenAI 相容 API 對話程式</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
+        body { font-family: Arial, sans-serif; margin: 20px; display: flex; }
+        #sidebar { width: 200px; margin-right: 20px; }
+        #conversation-list { border: 1px solid #ccc; padding: 10px; height: 600px; overflow-y: scroll; }
+        #conversation-list div { padding: 5px; cursor: pointer; }
+        #conversation-list div:hover { background-color: #f0f0f0; }
+        #main-content { flex: 1; }
         #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
         #input-container { display: flex; }
-        #message-input { flex: 1; padding: 5px; margin-right: 5px; }
-        #send-button { padding: 5px 10px; }
+        #message-input { flex: 1; padding: 5px; margin-right: 5px; resize: vertical; min-height: 50px; }
+        #send-button { padding: 5px 10px; align-self: flex-end; }
         #settings-container { margin-bottom: 10px; }
         #model-select { margin-left: 5px; }
         /* Style for code blocks */
@@ -36,35 +41,46 @@
     </style>
 </head>
 <body>
-    <div id="settings-container">
-        <button onclick="startNewChat()">新對話</button>
-        <input type="text" id="server-url" placeholder="伺服器網址" />
-        <input type="text" id="api-key" placeholder="API 金鑰" />
-        <select id="model-select" onchange="saveSelectedModel()">
-            <option value="">選擇模型</option>
-        </select>
-        <button onclick="fetchModels()">取得模型</button>
+    <div id="sidebar">
+        <div id="conversation-list"></div>
     </div>
-    <div id="chat-container"></div>
-    <div id="input-container">
-        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="if(event.key === 'Enter') sendMessage()" />
-        <button id="send-button" onclick="sendMessage()">送出</button>
+    <div id="main-content">
+        <div id="settings-container">
+            <button id="new-chat-button" onclick="startNewChat()">新對話</button>
+            <input type="text" id="server-url" placeholder="伺服器網址" />
+            <input type="text" id="api-key" placeholder="API 金鑰" />
+            <select id="model-select" onchange="saveSelectedModel()">
+                <option value="">選擇模型</option>
+            </select>
+            <button id="fetch-models-button" onclick="fetchModels()">取得模型</button>
+        </div>
+        <div id="chat-container"></div>
+        <div id="input-container">
+            <textarea id="message-input" placeholder="輸入訊息..." onkeydown="if(event.key === 'Enter' && event.ctrlKey) sendMessage()"></textarea>
+            <button id="send-button" onclick="sendMessage()">送出</button>
+        </div>
     </div>
 
     <!-- Include marked.min.js -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
     <script>
+        let currentConversationId = null;
+        let chatHistory = [];
+        let isSending = false;
+
         // Load saved settings from localStorage
         document.addEventListener('DOMContentLoaded', () => {
             const serverUrl = localStorage.getItem('serverUrl');
             const apiKey = localStorage.getItem('apiKey');
             const selectedModel = localStorage.getItem('selectedModel');
-            const chatHistory = JSON.parse(localStorage.getItem('chatHistory')) || [];
 
             if (serverUrl) document.getElementById('server-url').value = serverUrl;
             if (apiKey) document.getElementById('api-key').value = apiKey;
             if (selectedModel) document.getElementById('model-select').value = selectedModel;
+
+            // Load conversation list
+            loadConversationList();
 
             // Optionally load models if they are saved
             const savedModels = localStorage.getItem('models');
@@ -72,23 +88,85 @@
                 populateModelSelect(JSON.parse(savedModels));
             }
 
-            // Restore chat history
-            chatHistory.forEach(([sender, message]) => {
-                appendMessage(sender, message);
-            });
+            // Check if there is an existing conversation to load
+            const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
+            const conversationIds = Object.keys(conversationList);
+
+            if (conversationIds.length > 0) {
+                // Load the first conversation
+                currentConversationId = conversationIds[0];
+                chatHistory = JSON.parse(localStorage.getItem(`conversation-${currentConversationId}`)) || [];
+                chatHistory.forEach(([sender, message]) => {
+                    appendMessage(sender, message);
+                });
+            } else {
+                // Start a new conversation if none exist
+                startNewChat();
+            }
         });
 
         function startNewChat() {
-            // Clear chat history
+            if (isSending) return;
+
+            // Generate a new conversation ID using timestamp
+            currentConversationId = new Date().toISOString();
             chatHistory = [];
-            localStorage.removeItem('chatHistory');
 
             // Clear chat container
             const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
+
+            // Save new conversation to localStorage
+            saveConversation();
+
+            // Add new conversation to the list
+            addConversationToList(currentConversationId);
+        }
+
+        function loadConversationList() {
+            const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
+            const conversationListDiv = document.getElementById('conversation-list');
+            conversationListDiv.innerHTML = '';
+
+            Object.keys(conversationList).forEach(conversationId => {
+                const conversationItem = document.createElement('div');
+                conversationItem.textContent = conversationId;
+                conversationItem.onclick = () => loadConversation(conversationId);
+                conversationListDiv.appendChild(conversationItem);
+            });
+        }
+
+        function addConversationToList(conversationId) {
+            const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
+            conversationList[conversationId] = true;
+            localStorage.setItem('conversationList', JSON.stringify(conversationList));
+
+            const conversationListDiv = document.getElementById('conversation-list');
+            const conversationItem = document.createElement('div');
+            conversationItem.textContent = conversationId;
+            conversationItem.onclick = () => loadConversation(conversationId);
+            conversationListDiv.appendChild(conversationItem);
+        }
+
+        function loadConversation(conversationId) {
+            if (isSending) return;
+
+            currentConversationId = conversationId;
+            chatHistory = JSON.parse(localStorage.getItem(`conversation-${conversationId}`)) || [];
+
+            // Clear chat container
+            const chatContainer = document.getElementById('chat-container');
+            chatContainer.innerHTML = '';
+
+            // Restore chat history
+            chatHistory.forEach(([sender, message]) => {
+                appendMessage(sender, message);
+            });
         }
 
         async function fetchModels() {
+            if (isSending) return;
+
             let serverUrl = document.getElementById('server-url').value.trim();
             const apiKey = document.getElementById('api-key').value.trim();
 
@@ -147,6 +225,8 @@
         }
 
         async function sendMessage() {
+            if (isSending) return;
+
             let serverUrl = document.getElementById('server-url').value.trim();
             const apiKey = document.getElementById('api-key').value.trim();
             const modelId = document.getElementById('model-select').value;
@@ -164,9 +244,11 @@
             // Append user message to chat container and chat history
             appendMessage('user', userMessage);
             chatHistory.push(['user', userMessage]);
-            localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+            saveConversation();
 
             messageInput.value = '';
+            isSending = true;
+            disableUI();
 
             try {
                 console.log('Sending message to:', requestUrl); // Log the request URL
@@ -222,7 +304,7 @@
                                 if (!assistantMessageElement) {
                                     assistantMessageElement = appendMessage('assistant', '');
                                     chatHistory.push(['assistant', '']); // Add placeholder for assistant message
-                                    localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+                                    saveConversation();
                                 }
 
                                 assistantMessageElement.innerHTML = `<strong>assistant:</strong> ${marked.parse(assistantMessage)}`;
@@ -239,7 +321,7 @@
 
                                 // Update the last assistant message in chat history
                                 chatHistory[chatHistory.length - 1][1] = assistantMessage;
-                                localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+                                saveConversation();
                             }
                         }
                     }
@@ -247,6 +329,9 @@
             } catch (error) {
                 console.error('通訊錯誤:', error);
                 alert(`通訊錯誤，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            } finally {
+                isSending = false;
+                enableUI();
             }
         }
 
@@ -283,8 +368,39 @@
                 });
         }
 
-        // Initialize chat history
-        let chatHistory = JSON.parse(localStorage.getItem('chatHistory')) || [];
+        function saveConversation() {
+            if (currentConversationId) {
+                localStorage.setItem(`conversation-${currentConversationId}`, JSON.stringify(chatHistory));
+            }
+        }
+
+        function disableUI() {
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const newChatButton = document.getElementById('new-chat-button');
+            const modelSelect = document.getElementById('model-select');
+            const fetchModelsButton = document.getElementById('fetch-models-button');
+
+            if (messageInput) messageInput.disabled = true;
+            if (sendButton) sendButton.disabled = true;
+            if (newChatButton) newChatButton.disabled = true;
+            if (modelSelect) modelSelect.disabled = true;
+            if (fetchModelsButton) fetchModelsButton.disabled = true;
+        }
+
+        function enableUI() {
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const newChatButton = document.getElementById('new-chat-button');
+            const modelSelect = document.getElementById('model-select');
+            const fetchModelsButton = document.getElementById('fetch-models-button');
+
+            if (messageInput) messageInput.disabled = false;
+            if (sendButton) sendButton.disabled = false;
+            if (newChatButton) newChatButton.disabled = false;
+            if (modelSelect) modelSelect.disabled = false;
+            if (fetchModelsButton) fetchModelsButton.disabled = false;
+        }
     </script>
 </body>
 </html>
