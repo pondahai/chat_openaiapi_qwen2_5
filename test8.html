@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI 相容 API 對話程式</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
+        #input-container { display: flex; }
+        #message-input { flex: 1; padding: 5px; margin-right: 5px; }
+        #send-button { padding: 5px 10px; }
+        #settings-container { margin-bottom: 10px; }
+        #model-select { margin-left: 5px; }
+        /* Style for code blocks */
+        #chat-container code {
+            background-color: black;
+            color: white;
+            font-size: 0.9em; /* Smaller font size */
+            display: inline-block; /* Ensure background covers the entire element */
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            position: relative;
+        }
+        #chat-container code .copy-button {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <div id="settings-container">
+        <button onclick="startNewChat()">新對話</button>
+        <input type="text" id="server-url" placeholder="伺服器網址" />
+        <input type="text" id="api-key" placeholder="API 金鑰" />
+        <select id="model-select" onchange="saveSelectedModel()">
+            <option value="">選擇模型</option>
+        </select>
+        <button onclick="fetchModels()">取得模型</button>
+    </div>
+    <div id="chat-container"></div>
+    <div id="input-container">
+        <input type="text" id="message-input" placeholder="輸入訊息..." onkeypress="if(event.key === 'Enter') sendMessage()" />
+        <button id="send-button" onclick="sendMessage()">送出</button>
+    </div>
+
+    <!-- Include marked.min.js -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+    <script>
+        // Load saved settings from localStorage
+        document.addEventListener('DOMContentLoaded', () => {
+            const serverUrl = localStorage.getItem('serverUrl');
+            const apiKey = localStorage.getItem('apiKey');
+            const selectedModel = localStorage.getItem('selectedModel');
+            const chatHistory = JSON.parse(localStorage.getItem('chatHistory')) || [];
+
+            if (serverUrl) document.getElementById('server-url').value = serverUrl;
+            if (apiKey) document.getElementById('api-key').value = apiKey;
+            if (selectedModel) document.getElementById('model-select').value = selectedModel;
+
+            // Optionally load models if they are saved
+            const savedModels = localStorage.getItem('models');
+            if (savedModels) {
+                populateModelSelect(JSON.parse(savedModels));
+            }
+
+            // Restore chat history
+            chatHistory.forEach(([sender, message]) => {
+                appendMessage(sender, message);
+            });
+        });
+
+        function startNewChat() {
+            // Clear chat history
+            chatHistory = [];
+            localStorage.removeItem('chatHistory');
+
+            // Clear chat container
+            const chatContainer = document.getElementById('chat-container');
+            chatContainer.innerHTML = '';
+        }
+
+        async function fetchModels() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+
+            if (!serverUrl || !apiKey) {
+                alert('請填寫伺服器網址和API金鑰。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1" for the request
+            const requestUrl = serverUrl.endsWith('/v1') ? serverUrl : `${serverUrl}/v1`;
+
+            try {
+                const response = await fetch(`${requestUrl}/models`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+                const data = await response.json();
+                console.log('取得模型的回應內容:', data); // Log the response to the console
+                populateModelSelect(data.data);
+                localStorage.setItem('models', JSON.stringify(data.data)); // Save models to localStorage
+                localStorage.setItem('serverUrl', serverUrl); // Save original server URL to localStorage
+                localStorage.setItem('apiKey', apiKey); // Save API key to localStorage
+            } catch (error) {
+                console.error('無法取得模型列表:', error);
+                alert(`無法取得模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            }
+        }
+
+        function populateModelSelect(models) {
+            const modelSelect = document.getElementById('model-select');
+            modelSelect.innerHTML = '<option value="">選擇模型</option>';
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.id;
+                modelSelect.appendChild(option);
+            });
+
+            // Set the selected model from localStorage if it exists
+            const selectedModel = localStorage.getItem('selectedModel');
+            if (selectedModel) {
+                modelSelect.value = selectedModel;
+            }
+        }
+
+        function saveSelectedModel() {
+            const modelSelect = document.getElementById('model-select');
+            const selectedModel = modelSelect.value;
+            localStorage.setItem('selectedModel', selectedModel);
+        }
+
+        async function sendMessage() {
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+            const modelId = document.getElementById('model-select').value;
+            const messageInput = document.getElementById('message-input');
+            const userMessage = messageInput.value.trim();
+
+            if (!userMessage || !serverUrl || !apiKey || !modelId) {
+                alert('請填寫所有必要的欄位。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1" for the request
+            const requestUrl = serverUrl.endsWith('/v1') ? serverUrl : `${serverUrl}/v1`;
+
+            // Append user message to chat container and chat history
+            appendMessage('user', userMessage);
+            chatHistory.push(['user', userMessage]);
+            localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+
+            messageInput.value = '';
+
+            try {
+                console.log('Sending message to:', requestUrl); // Log the request URL
+                console.log('Message payload:', {
+                    model: modelId,
+                    messages: chatHistory.map(([role, content]) => ({ role, content })),
+                    stream: true
+                }); // Log the message payload
+
+                const response = await fetch(`${requestUrl}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: modelId,
+                        messages: chatHistory.map(([role, content]) => ({ role, content })),
+                        stream: true
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let partialLine = '';
+                let assistantMessage = '';
+                let assistantMessageElement = null;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = (partialLine + chunk).split('\n');
+                    partialLine = lines.pop(); // Keep the last partial line for the next iteration
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.substring(6);
+                            if (data === '[DONE]') {
+                                break;
+                            }
+                            const parsedData = JSON.parse(data);
+                            const deltaContent = parsedData.choices[0].delta.content;
+                            if (deltaContent) {
+                                assistantMessage += deltaContent;
+
+                                if (!assistantMessageElement) {
+                                    assistantMessageElement = appendMessage('assistant', '');
+                                    chatHistory.push(['assistant', '']); // Add placeholder for assistant message
+                                    localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+                                }
+
+                                assistantMessageElement.innerHTML = `<strong>assistant:</strong> ${marked.parse(assistantMessage)}`;
+
+                                // Find all code elements and add copy button
+                                const codeElements = assistantMessageElement.querySelectorAll('code');
+                                codeElements.forEach(codeElement => {
+                                    const copyButton = document.createElement('button');
+                                    copyButton.className = 'copy-button';
+                                    copyButton.textContent = '⎘';
+                                    copyButton.onclick = () => copyCode(codeElement);
+                                    codeElement.appendChild(copyButton);
+                                });
+
+                                // Update the last assistant message in chat history
+                                chatHistory[chatHistory.length - 1][1] = assistantMessage;
+                                localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('通訊錯誤:', error);
+                alert(`通訊錯誤，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            }
+        }
+
+        function appendMessage(sender, message) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageElement = document.createElement('div');
+            messageElement.innerHTML = `<strong>${sender}:</strong> ${marked.parse(message)}`;
+
+            // Find all code elements and add copy button
+            const codeElements = messageElement.querySelectorAll('code');
+            codeElements.forEach(codeElement => {
+                const copyButton = document.createElement('button');
+                copyButton.className = 'copy-button';
+                copyButton.textContent = '⎘';
+                copyButton.onclick = () => copyCode(codeElement);
+                codeElement.appendChild(copyButton);
+            });
+
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            return messageElement;
+        }
+
+        function copyCode(codeElement) {
+            const textToCopy = codeElement.textContent.replace(/⎘/g, ''); // Remove the copy button text
+            navigator.clipboard.writeText(textToCopy)
+                .then(() => {
+                    alert('已複製到剪貼簿！');
+                })
+                .catch(err => {
+                    console.error('複製失敗:', err);
+                    alert('複製失敗，請手動複製。');
+                });
+        }
+
+        // Initialize chat history
+        let chatHistory = JSON.parse(localStorage.getItem('chatHistory')) || [];
+    </script>
+</body>
+</html>
