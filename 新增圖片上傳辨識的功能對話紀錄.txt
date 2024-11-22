@@ -1,0 +1,19 @@
+要新增一個新功能，讓程式可以上傳照片，修改項目如下:
+1.圖片辨識會用到另一組伺服器網址與金鑰，因此必須新增一套新的伺服器網址框 金鑰框 選擇模型機制 以及 取得模型按鈕
+2.在輸入訊息框左側新增一個上傳圖片的按鈕，取得圖片後，成是要將圖片轉換成base64字串
+3.程式在讀入圖片並且轉換成base64之後，要使用上述第二套伺服器機制 同樣以 POST方法將圖片的BASE64上傳給伺服器 上傳的封包格式:        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "What's in this image?"},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}",
+                        },
+                    },
+                ],
+            }
+        ],
+        model=
+其中base64_image就是影像的base64 model 項目就是上述第二套伺服器使用者指定的模型
