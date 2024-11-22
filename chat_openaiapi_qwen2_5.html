@@ -8,7 +8,8 @@
         body { font-family: Arial, sans-serif; margin: 20px; display: flex; }
         #sidebar { width: 200px; margin-right: 20px; }
         #conversation-list { border: 1px solid #ccc; padding: 10px; height: 560px; overflow-y: scroll; }
-        #conversation-list div { padding: 5px; cursor: pointer; }
+        #conversation-list div { padding: 5px; cursor: pointer; font-size: 0.5em; } /* Set font size to half size */
+        #conversation-list div span { display: block; } /* Ensure the timestamp and preview text are on separate lines */
         #conversation-list div:hover { background-color: #f0f0f0; }
         #main-content { flex: 1; }
         #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
@@ -150,8 +151,10 @@
             conversationListDiv.innerHTML = '';
 
             Object.keys(conversationList).forEach(conversationId => {
+                const chatHistory = JSON.parse(localStorage.getItem(`conversation-${conversationId}`)) || [];
+                const firstMessage = chatHistory.length > 0 ? chatHistory[0][1].substring(0, 14) : '';
                 const conversationItem = document.createElement('div');
-                conversationItem.textContent = conversationId;
+                conversationItem.innerHTML = `<span>${conversationId}</span><span>${firstMessage}</span>`;
                 conversationItem.onclick = () => loadConversation(conversationId);
                 conversationListDiv.appendChild(conversationItem);
             });
