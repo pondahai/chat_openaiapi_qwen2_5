@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenAI 相容 API 對話程式</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; display: flex; }
+        #sidebar { width: 200px; margin-right: 20px; }
+        #conversation-list { border: 1px solid #ccc; padding: 10px; height: 560px; overflow-y: scroll; }
+        #conversation-list div { padding: 5px; cursor: pointer; font-size: 0.5em; } /* Set font size to half size */
+        #conversation-list div span { display: block; } /* Ensure the timestamp and preview text are on separate lines */
+        #conversation-list div:hover { background-color: #f0f0f0; }
+        #conversation-list div.active { background-color: #ddd; } /* Gray background for active conversation */
+        #main-content { flex: 1; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
+        #input-container { display: flex; }
+        #message-input { flex: 1; padding: 5px; margin-right: 5px; resize: vertical; min-height: 50px; }
+        #send-button { padding: 5px 10px; align-self: flex-end; }
+        #settings-container { margin-bottom: 10px; }
+        #model-select { margin-left: 5px; }
+        /* Style for code blocks */
+        #chat-container code {
+            background-color: black;
+            color: white;
+            font-size: 0.9em; /* Smaller font size */
+            display: inline-block; /* Ensure background covers the entire element */
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: 'Courier New', Courier, monospace;
+            position: relative;
+        }
+        #chat-container code .copy-button {
+            position: absolute;
+            top: -1em;
+            right: 2px;
+            background: none;
+            border: none;
+            color: black;
+            cursor: pointer;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <div id="sidebar">
+        <button id="new-chat-button" onclick="startNewChat()" style="margin-bottom: 10px;">新對話</button>
+        <div id="conversation-list"></div>
+    </div>
+    <div id="main-content">
+        <div id="settings-container">
+            <input type="text" id="server-url" placeholder="伺服器網址" />
+            <input type="text" id="api-key" placeholder="API 金鑰" />
+            <select id="model-select" onchange="saveSelectedModel()">
+                <option value="">選擇模型</option>
+            </select>
+            <button id="fetch-models-button" onclick="fetchModels()">取得模型</button>
+        </div>
+        <div id="image-settings-container">
+            <input type="text" id="image-server-url" placeholder="圖片伺服器網址" />
+            <input type="text" id="image-api-key" placeholder="圖片API金鑰" />
+            <select id="image-model-select" onchange="saveSelectedImageModel()">
+                <option value="">選擇圖片模型</option>
+            </select>
+            <button id="fetch-image-models-button" onclick="fetchImageModels()">取得圖片模型</button>
+        </div>
+        <div id="chat-container"></div>
+        <div id="input-container">
+            <button id="upload-image-button" onclick="document.getElementById('image-upload').click()">上傳圖片</button>
+            <input type="file" id="image-upload" accept="image/*" style="display:none;" onchange="handleImageUpload(this.files)">
+            <textarea id="message-input" placeholder="輸入訊息..." onkeydown="if(event.key === 'Enter' && event.ctrlKey) sendMessage()" onpaste="handlePaste(event)"></textarea>
+            <button id="send-button" onclick="sendMessage()">送出</button>
+        </div>
+    </div>
+
+    <!-- Include marked.min.js -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 引入 DOMPurify -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.0/purify.min.js"></script>
+
+    <script>
+        let currentConversationId = null;
+        let chatHistory = [];
+        let isSending = false;
+
+        // Load saved settings from localStorage
+        document.addEventListener('DOMContentLoaded', () => {
+            const serverUrl = localStorage.getItem('serverUrl');
+            const apiKey = localStorage.getItem('apiKey');
+            const selectedModel = localStorage.getItem('selectedModel');
+            const imageServerUrl = localStorage.getItem('imageServerUrl');
+            const imageApiKey = localStorage.getItem('imageApiKey');
+            const selectedImageModel = localStorage.getItem('selectedImageModel');
+
+            if (serverUrl) document.getElementById('server-url').value = serverUrl;
+            if (apiKey) document.getElementById('api-key').value = apiKey;
+            if (selectedModel) document.getElementById('model-select').value = selectedModel;
+            if (imageServerUrl) document.getElementById('image-server-url').value = imageServerUrl;
+            if (imageApiKey) document.getElementById('image-api-key').value = imageApiKey;
+            if (selectedImageModel) document.getElementById('image-model-select').value = selectedImageModel;
+
+            // Load conversation list
+            loadConversationList();
+
+            // Optionally load models if they are saved
+            const savedModels = localStorage.getItem('models');
+            if (savedModels) {
+                populateModelSelect(JSON.parse(savedModels));
+            }
+
+            const savedImageModels = localStorage.getItem('imageModels');
+            if (savedImageModels) {
+                populateImageModelSelect(JSON.parse(savedImageModels));
+            }
+
+            // Check if there is an existing conversation to load
+            const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
+            const conversationIds = Object.keys(conversationList);
+
+            if (conversationIds.length > 0) {
+                // Load the first conversation
+                currentConversationId = conversationIds[0];
+                chatHistory = JSON.parse(localStorage.getItem(`conversation-${currentConversationId}`)) || [];
+                chatHistory.forEach(([sender, message]) => {
+                    appendMessage(sender, message);
+                });
+                markActiveConversation(currentConversationId);
+            } else {
+                // Start a new conversation if none exist
+                startNewChat();
+            }
+        });
+
+        function startNewChat() {
+            if (isSending) return;
+
+            // Generate a new conversation ID using timestamp
+            currentConversationId = new Date().toISOString();
+            chatHistory = [];
+
+            // Clear chat container
+            const chatContainer = document.getElementById('chat-container');
+            chatContainer.innerHTML = '';
+
+            // Save new conversation to localStorage
+            saveConversation();
+
+            // Add new conversation to the list
+            addConversationToList(currentConversationId);
+            markActiveConversation(currentConversationId);
+        }
+
+        function loadConversationList() {
+            const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
+            const conversationListDiv = document.getElementById('conversation-list');
+            conversationListDiv.innerHTML = '';
+
+            Object.keys(conversationList).forEach(conversationId => {
+                const chatHistory = JSON.parse(localStorage.getItem(`conversation-${conversationId}`)) || [];
+                const firstMessage = chatHistory.length > 0 ? chatHistory[0][1].substring(0, 14) : '';
+                const conversationItem = document.createElement('div');
+                conversationItem.innerHTML = `<span>${conversationId}</span><span>${firstMessage}</span>`;
+                conversationItem.onclick = () => loadConversation(conversationId);
+                conversationListDiv.appendChild(conversationItem);
+            });
+        }
+
+        function addConversationToList(conversationId) {
+            const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
+            conversationList[conversationId] = true;
+            localStorage.setItem('conversationList', JSON.stringify(conversationList));
+
+            const conversationListDiv = document.getElementById('conversation-list');
+            const conversationItem = document.createElement('div');
+            conversationItem.textContent = conversationId;
+            conversationItem.onclick = () => loadConversation(conversationId);
+            conversationListDiv.appendChild(conversationItem);
+        }
+
+        function loadConversation(conversationId) {
+            if (isSending) return;
+
+            currentConversationId = conversationId;
+            chatHistory = JSON.parse(localStorage.getItem(`conversation-${conversationId}`)) || [];
+
+            // Clear chat container
+            const chatContainer = document.getElementById('chat-container');
+            chatContainer.innerHTML = '';
+
+            // Restore chat history
+            chatHistory.forEach(([sender, message]) => {
+                appendMessage(sender, message);
+            });
+            markActiveConversation(conversationId);
+        }
+
+        async function fetchModels() {
+            if (isSending) return;
+
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+
+            if (!serverUrl || !apiKey) {
+                alert('請填寫伺服器網址和API金鑰。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1" for the request
+            const requestUrl = serverUrl.endsWith('/v1') ? serverUrl : `${serverUrl}/v1`;
+
+            try {
+                const response = await fetch(`${requestUrl}/models`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+                const data = await response.json();
+                console.log('取得模型的回應內容:', data); // Log the response to the console
+                populateModelSelect(data.data);
+                localStorage.setItem('models', JSON.stringify(data.data)); // Save models to localStorage
+                localStorage.setItem('serverUrl', serverUrl); // Save original server URL to localStorage
+                localStorage.setItem('apiKey', apiKey); // Save API key to localStorage
+            } catch (error) {
+                console.error('無法取得模型列表:', error);
+                alert(`無法取得模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            }
+        }
+
+        function populateModelSelect(models) {
+            const modelSelect = document.getElementById('model-select');
+            modelSelect.innerHTML = '<option value="">選擇模型</option>';
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.id;
+                modelSelect.appendChild(option);
+            });
+
+            // Set the selected model from localStorage if it exists
+            const selectedModel = localStorage.getItem('selectedModel');
+            if (selectedModel) {
+                modelSelect.value = selectedModel;
+            }
+        }
+
+        function saveSelectedModel() {
+            const modelSelect = document.getElementById('model-select');
+            const selectedModel = modelSelect.value;
+            localStorage.setItem('selectedModel', selectedModel);
+        }
+
+        async function fetchImageModels() {
+            if (isSending) return;
+
+            let serverUrl = document.getElementById('image-server-url').value.trim();
+            const apiKey = document.getElementById('image-api-key').value.trim();
+
+            if (!serverUrl || !apiKey) {
+                alert('請填寫圖片伺服器網址和API金鑰。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1" for the request
+            const requestUrl = serverUrl.endsWith('/v1') ? serverUrl : `${serverUrl}/v1`;
+
+            try {
+                const response = await fetch(`${requestUrl}/models`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`
+                    }
+                });
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+                const data = await response.json();
+                console.log('取得圖片模型的回應內容:', data); // Log the response to the console
+                populateImageModelSelect(data.data);
+                localStorage.setItem('imageModels', JSON.stringify(data.data)); // Save models to localStorage
+                localStorage.setItem('imageServerUrl', serverUrl); // Save original server URL to localStorage
+                localStorage.setItem('imageApiKey', apiKey); // Save API key to localStorage
+            } catch (error) {
+                console.error('無法取得圖片模型列表:', error);
+                alert(`無法取得圖片模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            }
+        }
+
+        function populateImageModelSelect(models) {
+            const modelSelect = document.getElementById('image-model-select');
+            modelSelect.innerHTML = '<option value="">選擇圖片模型</option>';
+            models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.id;
+                option.textContent = model.id;
+                modelSelect.appendChild(option);
+            });
+
+            // Set the selected model from localStorage if it exists
+            const selectedModel = localStorage.getItem('selectedImageModel');
+            if (selectedModel) {
+                modelSelect.value = selectedModel;
+            }
+        }
+
+        function saveSelectedImageModel() {
+            const modelSelect = document.getElementById('image-model-select');
+            const selectedModel = modelSelect.value;
+            localStorage.setItem('selectedImageModel', selectedModel);
+        }
+
+        async function sendMessage() {
+            if (isSending) return;
+
+            let serverUrl = document.getElementById('server-url').value.trim();
+            const apiKey = document.getElementById('api-key').value.trim();
+            const modelId = document.getElementById('model-select').value;
+            const messageInput = document.getElementById('message-input');
+            const userMessage = messageInput.value.trim();
+
+            if (!userMessage || !serverUrl || !apiKey || !modelId) {
+                alert('請填寫所有必要的欄位。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1" for the request
+            const requestUrl = serverUrl.endsWith('/v1') ? serverUrl : `${serverUrl}/v1`;
+
+            // Append user message to chat container and chat history
+            appendMessage('user', userMessage);
+            chatHistory.push(['user', userMessage]);
+            saveConversation();
+
+            messageInput.value = '';
+            isSending = true;
+            disableUI();
+
+            try {
+                console.log('Sending message to:', requestUrl); // Log the request URL
+                console.log('Message payload:', {
+                    model: modelId,
+                    messages: chatHistory.map(([role, content]) => ({ role, content })),
+                    stream: true
+                }); // Log the message payload
+
+                const response = await fetch(`${requestUrl}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        model: modelId,
+                        messages: chatHistory.map(([role, content]) => ({ role, content })),
+                        stream: true
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let partialLine = '';
+                let assistantMessage = '';
+                let assistantMessageElement = null;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    const lines = (partialLine + chunk).split('\n');
+                    partialLine = lines.pop(); // Keep the last partial line for the next iteration
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.substring(6);
+                            if (data === '[DONE]') {
+                                break;
+                            }
+                            const parsedData = JSON.parse(data);
+                            const deltaContent = parsedData.choices[0].delta.content;
+                            if (deltaContent) {
+                                assistantMessage += deltaContent;
+
+                                if (!assistantMessageElement) {
+                                    assistantMessageElement = appendMessage('assistant', '');
+                                    chatHistory.push(['assistant', '']); // Add placeholder for assistant message
+                                    saveConversation();
+                                }
+
+                                assistantMessageElement.innerHTML = `<strong>assistant:</strong> ${marked.parse(assistantMessage)}`;
+
+                                // Find all code elements and add copy button
+                                const codeElements = assistantMessageElement.querySelectorAll('code');
+                                codeElements.forEach(codeElement => {
+                                    const copyButton = document.createElement('button');
+                                    copyButton.className = 'copy-button';
+                                    copyButton.textContent = '⎘';
+                                    copyButton.onclick = () => copyCode(codeElement);
+                                    codeElement.appendChild(copyButton);
+                                });
+
+                                // Update the last assistant message in chat history
+                                chatHistory[chatHistory.length - 1][1] = assistantMessage;
+                                saveConversation();
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('通訊錯誤:', error);
+                alert(`通訊錯誤，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            } finally {
+                isSending = false;
+                enableUI();
+            }
+        }
+
+        async function handleImageUpload(files) {
+            if (files.length === 0) return;
+
+            const file = files[0];
+            const reader = new FileReader();
+
+            reader.onloadend = async () => {
+                const base64Image = reader.result.split(',')[1]; // Get base64 part
+
+                let serverUrl = document.getElementById('image-server-url').value.trim();
+                const apiKey = document.getElementById('image-api-key').value.trim();
+                const modelId = document.getElementById('image-model-select').value;
+
+                if (!serverUrl || !apiKey || !modelId) {
+                    alert('請填寫所有必要的圖片欄位。');
+                    return;
+                }
+
+                // Ensure the server URL ends with "/v1" for the request
+                const requestUrl = serverUrl.endsWith('/v1') ? serverUrl : `${serverUrl}/v1`;
+
+                const payload = {
+                    messages: [
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": "What's in this image?"},
+                                {
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": `data:image/jpeg;base64,${base64Image}`,
+                                    },
+                                },
+                            ],
+                        }
+                    ],
+                    model: modelId
+                };
+
+                isSending = true;
+                disableUI();
+
+                try {
+                    console.log('Sending image to:', requestUrl); // Log the request URL
+                    console.log('Image payload:', payload); // Log the message payload
+
+                    const response = await fetch(`${requestUrl}/chat/completions`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${apiKey}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorMessage = await response.text();
+                        throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                    }
+
+                    const data = await response.json();
+                    console.log('Image response:', data); // Log the response to the console
+
+                    const assistantMessage = data.choices[0].message.content;
+                    appendMessage('assistant', assistantMessage);
+                    chatHistory.push(['assistant', assistantMessage]);
+                    saveConversation();
+                } catch (error) {
+                    console.error('通訊錯誤:', error);
+                    alert(`通訊錯誤，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+                } finally {
+                    isSending = false;
+                    enableUI();
+                }
+            };
+
+            reader.readAsDataURL(file);
+        }
+
+        function appendMessage(sender, message) {
+            const chatContainer = document.getElementById('chat-container');
+            const messageElement = document.createElement('div');
+
+            if (sender === 'user') {
+                // 使用 DOMPurify 來清理 HTML 輸入
+                const cleanMessage = DOMPurify.sanitize(message);
+
+                //messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
+                messageElement.innerHTML = `<strong>${sender}:</strong> <span></span>`;
+                messageElement.querySelector('span').innerText = message;
+            } else {
+                messageElement.innerHTML = `<strong>${sender}:</strong> ${marked.parse(message)}`;
+            }
+
+            // Find all code elements and add copy button
+            const codeElements = messageElement.querySelectorAll('code');
+            codeElements.forEach(codeElement => {
+                const copyButton = document.createElement('button');
+                copyButton.className = 'copy-button';
+                copyButton.textContent = '⎘';
+                copyButton.onclick = () => copyCode(codeElement);
+                codeElement.appendChild(copyButton);
+            });
+
+            chatContainer.appendChild(messageElement);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            return messageElement;
+        }
+
+        function copyCode(codeElement) {
+            const textToCopy = codeElement.textContent.replace(/⎘/g, ''); // Remove the copy button text
+            navigator.clipboard.writeText(textToCopy)
+                .then(() => {
+                    alert('已複製到剪貼簿！');
+                })
+                .catch(err => {
+                    console.error('複製失敗:', err);
+                    alert('複製失敗，請手動複製。');
+                });
+        }
+
+        function saveConversation() {
+            if (currentConversationId) {
+                localStorage.setItem(`conversation-${currentConversationId}`, JSON.stringify(chatHistory));
+            }
+        }
+
+        function disableUI() {
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const newChatButton = document.getElementById('new-chat-button');
+            const modelSelect = document.getElementById('model-select');
+            const fetchModelsButton = document.getElementById('fetch-models-button');
+            const imageUploadButton = document.getElementById('upload-image-button');
+            const imageModelSelect = document.getElementById('image-model-select');
+            const fetchImageModelsButton = document.getElementById('fetch-image-models-button');
+
+            if (messageInput) messageInput.disabled = true;
+            if (sendButton) sendButton.disabled = true;
+            if (newChatButton) newChatButton.disabled = true;
+            if (modelSelect) modelSelect.disabled = true;
+            if (fetchModelsButton) fetchModelsButton.disabled = true;
+            if (imageUploadButton) imageUploadButton.disabled = true;
+            if (imageModelSelect) imageModelSelect.disabled = true;
+            if (fetchImageModelsButton) fetchImageModelsButton.disabled = true;
+        }
+
+        function enableUI() {
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const newChatButton = document.getElementById('new-chat-button');
+            const modelSelect = document.getElementById('model-select');
+            const fetchModelsButton = document.getElementById('fetch-models-button');
+            const imageUploadButton = document.getElementById('upload-image-button');
+            const imageModelSelect = document.getElementById('image-model-select');
+            const fetchImageModelsButton = document.getElementById('fetch-image-models-button');
+
+            if (messageInput) messageInput.disabled = false;
+            if (sendButton) sendButton.disabled = false;
+            if (newChatButton) newChatButton.disabled = false;
+            if (modelSelect) modelSelect.disabled = false;
+            if (fetchModelsButton) fetchModelsButton.disabled = false;
+            if (imageUploadButton) imageUploadButton.disabled = false;
+            if (imageModelSelect) imageModelSelect.disabled = false;
+            if (fetchImageModelsButton) fetchImageModelsButton.disabled = false;
+        }
+
+        function handlePaste(event) {
+            const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+            for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (item.type.indexOf('image') !== -1) {
+                    const blob = item.getAsFile();
+                    const reader = new FileReader();
+                    reader.onloadend = async () => {
+                        const base64Image = reader.result.split(',')[1]; // Get base64 part
+                        handlePastedImage(base64Image);
+                    };
+                    reader.readAsDataURL(blob);
+                    event.preventDefault();
+                }
+            }
+        }
+
+        async function handlePastedImage(base64Image) {
+            let serverUrl = document.getElementById('image-server-url').value.trim();
+            const apiKey = document.getElementById('image-api-key').value.trim();
+            const modelId = document.getElementById('image-model-select').value;
+
+            if (!serverUrl || !apiKey || !modelId) {
+                alert('請填寫所有必要的圖片欄位。');
+                return;
+            }
+
+            // Ensure the server URL ends with "/v1" for the request
+            const requestUrl = serverUrl.endsWith('/v1') ? serverUrl : `${serverUrl}/v1`;
+
+            const payload = {
+                messages: [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": "What's in this image?"},
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": `data:image/jpeg;base64,${base64Image}`,
+                                },
+                            },
+                        ],
+                    }
+                ],
+                model: modelId
+            };
+
+            isSending = true;
+            disableUI();
+
+            try {
+                console.log('Sending image to:', requestUrl); // Log the request URL
+                console.log('Image payload:', payload); // Log the message payload
+
+                const response = await fetch(`${requestUrl}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${apiKey}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorMessage = await response.text();
+                    throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
+                }
+
+                const data = await response.json();
+                console.log('Image response:', data); // Log the response to the console
+
+                const assistantMessage = data.choices[0].message.content;
+                appendMessage('assistant', assistantMessage);
+                chatHistory.push(['assistant', assistantMessage]);
+                saveConversation();
+            } catch (error) {
+                console.error('通訊錯誤:', error);
+                alert(`通訊錯誤，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+            } finally {
+                isSending = false;
+                enableUI();
+            }
+        }
+
+        function markActiveConversation(conversationId) {
+            const conversationItems = document.querySelectorAll('#conversation-list div');
+            conversationItems.forEach(item => {
+                if (item.textContent.includes(conversationId)) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
+        }
+    </script>
+</body>
+</html>
