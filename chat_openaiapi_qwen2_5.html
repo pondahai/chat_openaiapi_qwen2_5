@@ -11,6 +11,7 @@
         #conversation-list div { padding: 5px; cursor: pointer; font-size: 0.5em; } /* Set font size to half size */
         #conversation-list div span { display: block; } /* Ensure the timestamp and preview text are on separate lines */
         #conversation-list div:hover { background-color: #f0f0f0; }
+        #conversation-list div.active { background-color: #ddd; } /* Gray background for active conversation */
         #main-content { flex: 1; }
         #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
         #input-container { display: flex; }
@@ -74,6 +75,8 @@
 
     <!-- Include marked.min.js -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- 引入 DOMPurify -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.0/purify.min.js"></script>
 
     <script>
         let currentConversationId = null;
@@ -121,6 +124,7 @@
                 chatHistory.forEach(([sender, message]) => {
                     appendMessage(sender, message);
                 });
+                markActiveConversation(currentConversationId);
             } else {
                 // Start a new conversation if none exist
                 startNewChat();
@@ -143,6 +147,7 @@
 
             // Add new conversation to the list
             addConversationToList(currentConversationId);
+            markActiveConversation(currentConversationId);
         }
 
         function loadConversationList() {
@@ -186,6 +191,7 @@
             chatHistory.forEach(([sender, message]) => {
                 appendMessage(sender, message);
             });
+            markActiveConversation(conversationId);
         }
 
         async function fetchModels() {
@@ -501,7 +507,17 @@
         function appendMessage(sender, message) {
             const chatContainer = document.getElementById('chat-container');
             const messageElement = document.createElement('div');
-            messageElement.innerHTML = `<strong>${sender}:</strong> ${marked.parse(message)}`;
+
+            if (sender === 'user') {
+                // 使用 DOMPurify 來清理 HTML 輸入
+                const cleanMessage = DOMPurify.sanitize(message);
+
+                //messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
+                messageElement.innerHTML = `<strong>${sender}:</strong> <span></span>`;
+                messageElement.querySelector('span').innerText = message;
+            } else {
+                messageElement.innerHTML = `<strong>${sender}:</strong> ${marked.parse(message)}`;
+            }
 
             // Find all code elements and add copy button
             const codeElements = messageElement.querySelectorAll('code');
@@ -660,6 +676,17 @@
                 isSending = false;
                 enableUI();
             }
+        }
+
+        function markActiveConversation(conversationId) {
+            const conversationItems = document.querySelectorAll('#conversation-list div');
+            conversationItems.forEach(item => {
+                if (item.textContent.includes(conversationId)) {
+                    item.classList.add('active');
+                } else {
+                    item.classList.remove('active');
+                }
+            });
         }
     </script>
 </body>
