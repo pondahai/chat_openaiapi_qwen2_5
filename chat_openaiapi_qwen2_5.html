@@ -341,7 +341,8 @@
             appendMessage('user', userMessage);
             chatHistory.push(['user', userMessage]);
             saveConversation();
-
+            loadConversationList();
+            
             messageInput.value = '';
             isSending = true;
             disableUI();
