@@ -5,21 +5,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenAI 相容 API 對話程式</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; display: flex; }
+        body { font-family: Arial, sans-serif; margin: 20px; display: flex; height: 100vh; }
         #sidebar { width: 200px; margin-right: 20px; }
-        #conversation-list { border: 1px solid #ccc; padding: 10px; height: 560px; overflow-y: scroll; }
+        #conversation-list { width: 200px; border: 1px solid #ccc; padding: 10px; height: 560px; overflow-y: scroll; }
         #conversation-list div { padding: 5px; cursor: pointer; font-size: 0.5em; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 5px; position: relative; }
         #conversation-list div:nth-child(even) { background-color: #f9f9f9; }
         #conversation-list div span { display: block; } /* Ensure the timestamp and preview text are on separate lines */
         #conversation-list div:hover { background-color: #f0f0f0; }
         #conversation-list div.active { background-color: #ddd; } /* Gray background for active conversation */
         #conversation-list div .delete-btn { position: absolute; top: 5px; right: 5px; background: none; border: none; color: red; cursor: pointer; font-size: 1.2em; }
-        #main-content { flex: 1; }
-        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; height: 300px; overflow-y: scroll; }
+        #main-content { flex: 1; display: flex; flex-direction: column; }
+        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; flex: 1; overflow-y: scroll; }
         #chat-container div { padding: 5px; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 5px; position: relative; }
         #chat-container div:nth-child(even) { background-color: #f9f9f9; }
         #chat-container div .delete-btn { position: absolute; top: 5px; right: 5px; background: none; border: none; color: red; cursor: pointer; font-size: 1.2em; }
-        #input-container { display: flex; }
+        #input-container { display: flex; margin-top: auto; }
         #message-input { flex: 1; padding: 5px; margin-right: 5px; resize: vertical; min-height: 50px; }
         #send-button { padding: 5px 10px; align-self: flex-end; }
         #settings-container { margin-bottom: 10px; }
@@ -124,7 +124,7 @@
 
             if (conversationIds.length > 0) {
                 // Load the first conversation
-                currentConversationId = conversationIds[0];
+                currentConversationId = conversationIds[conversationIds.length - 1];
                 chatHistory = JSON.parse(localStorage.getItem(`conversation-${currentConversationId}`)) || [];
                 chatHistory.forEach(([sender, message]) => {
                     appendMessage(sender, message);
@@ -160,7 +160,10 @@
             const conversationListDiv = document.getElementById('conversation-list');
             conversationListDiv.innerHTML = '';
 
-            Object.keys(conversationList).forEach(conversationId => {
+            // Convert conversationList keys to an array and sort in descending order
+            const conversationIds = Object.keys(conversationList).sort((a, b) => new Date(b) - new Date(a));
+
+            conversationIds.forEach(conversationId => {
                 const chatHistory = JSON.parse(localStorage.getItem(`conversation-${conversationId}`)) || [];
                 const firstMessage = chatHistory.length > 0 ? chatHistory[0][1].substring(0, 14) : '';
                 const conversationItem = document.createElement('div');
@@ -180,7 +183,7 @@
             conversationItem.textContent = conversationId;
             conversationItem.innerHTML = `<span>${conversationId}</span><button class="delete-btn" onclick="confirmDeleteConversation('${conversationId}')">X</button>`;
             conversationItem.onclick = () => loadConversation(conversationId);
-            conversationListDiv.appendChild(conversationItem);
+            conversationListDiv.prepend(conversationItem); // Use prepend to add new conversations to the top
         }
 
         function loadConversation(conversationId) {
@@ -342,7 +345,7 @@
             chatHistory.push(['user', userMessage]);
             saveConversation();
             loadConversationList();
-            
+                        
             messageInput.value = '';
             isSending = true;
             disableUI();
