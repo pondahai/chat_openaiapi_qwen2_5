@@ -320,8 +320,8 @@
             const apiKey = document.getElementById('image-api-key').value.trim();
             const serverUrlVersion = document.getElementById('image-server-url-version').value.trim();
 
-            if (!serverUrl || !apiKey) {
-                alert('請填寫圖片伺服器網址和API金鑰。');
+            if (!serverUrl || !serverUrlVersion || !apiKey) {
+                alert('請填寫圖片伺服器網址、版本和API金鑰。');
                 return;
             }
 
