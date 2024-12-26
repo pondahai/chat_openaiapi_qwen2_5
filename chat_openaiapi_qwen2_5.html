@@ -214,12 +214,27 @@
                 const chatHistory = JSON.parse(localStorage.getItem(`conversation-${conversationId}`)) || [];
                 const firstMessage = chatHistory.length > 0 ? chatHistory[0][1].substring(0, 14) : '';
                 const conversationItem = document.createElement('div');
-                conversationItem.innerHTML = `<span>${conversationId}</span><span>${firstMessage}</span><button class="delete-btn" onclick="confirmDeleteConversation('${conversationId}')">X</button>`;
+                // conversationItem.innerHTML = `<span>${conversationId}</span><span>${firstMessage}</span><button class="delete-btn" onclick="confirmDeleteConversation('${conversationId}')">X</button>`;
+                const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
+
+                const title = conversationList[conversationId];
+                conversationItem.innerHTML = `
+            <input type="text" value="${title}" onblur="updateConversationTitle(this, '${conversationId}')">
+            <span>${firstMessage}</span>
+            <button class="delete-btn" onclick="confirmDeleteConversation('${conversationId}')">X</button>
+        `;
+                
+
                 conversationItem.onclick = () => loadConversation(conversationId);
                 conversationListDiv.appendChild(conversationItem);
             });
         }
 
+        function updateConversationTitle(input, conversationId) {
+            const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
+            conversationList[conversationId] = input.value;
+            localStorage.setItem('conversationList', JSON.stringify(conversationList));
+        }
         function addConversationToList(conversationId) {
             const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
             conversationList[conversationId] = true;
