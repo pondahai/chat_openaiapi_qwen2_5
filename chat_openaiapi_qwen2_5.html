@@ -10,9 +10,9 @@
         #conversation-list { width: 100%; border: 1px solid #ccc; padding: 10px; height: calc(100vh - 120px); overflow-y: auto; box-sizing: border-box; }
         #conversation-list div { padding: 5px; cursor: pointer; font-size: 0.5em; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 5px; position: relative; }
         #conversation-list div:nth-child(even) { background-color: #f9f9f9; }
-        #conversation-list div span { display: block; } /* Ensure the timestamp and preview text are on separate lines */
+        #conversation-list div span { display: block; }
         #conversation-list div:hover { background-color: #f0f0f0; }
-        #conversation-list div.active { background-color: #ddd; } /* Gray background for active conversation */
+        #conversation-list div.active { background-color: #ddd; }
         #conversation-list div .delete-btn { position: absolute; top: 5px; right: 5px; background: none; border: none; color: red; cursor: pointer; font-size: 1.2em; }
         #main-content { flex: 1; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
         #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; flex: 1; overflow-y: auto; box-sizing: border-box; }
@@ -24,12 +24,11 @@
         #send-button { padding: 5px 10px; align-self: flex-end; box-sizing: border-box; }
         #settings-container { margin-bottom: 10px; box-sizing: border-box; }
         #model-select { margin-left: 5px; box-sizing: border-box; }
-        /* Style for code blocks */
         #chat-container code {
             background-color: black;
             color: white;
-            font-size: 0.9em; /* Smaller font size */
-            display: inline-block; /* Ensure background covers the entire element */
+            font-size: 0.9em;
+            display: inline-block;
             padding: 2px 4px;
             border-radius: 4px;
             font-family: 'Courier New', Courier, monospace;
@@ -45,27 +44,34 @@
             cursor: pointer;
             font-size: 1.2em;
         }
+        #chat-container code .tab-button {
+            position: absolute;
+            top: -1em;
+            right: 25px;
+            background: none;
+            border: none;
+            color: black;
+            cursor: pointer;
+            font-size: 1.2em;
+        }
         .accordion {
             margin-bottom: 10px;
         }
-
         .accordion-button {
             background-color: #f0f0f0;
             padding: 5px 10px;
             border: none;
             cursor: pointer;
         }
-
         .accordion-content {
             padding: 10px;
             border: 1px solid #ccc;
             border-radius: 5px;
             display: none;
         }
-
         .accordion-content.show {
             display: block;
-        }        
+        }
     </style>
 </head>
 <body>
@@ -80,13 +86,11 @@
                 <div id="server-url-container">
                     <label for="server-url">伺服器網址:</label>
                     <input type="text" id="server-url" />
-                    <!-- <span id="server-url-version-placeholder">/v1</span> -->
                     <div id="server-url-version-container">
                         <label for="server-url-version">伺服器網址版本:</label>
                         <input type="text" id="server-url-version" value="v1" />
                     </div>
                 </div>
-                <!-- <input type="text" id="server-url" placeholder="伺服器網址" /> -->
                 <input type="text" id="api-key" placeholder="API 金鑰" />
                 <select id="model-select" onchange="saveSelectedModel()">
                     <option value="">選擇模型</option>
@@ -101,7 +105,6 @@
                 <div id="image-server-url-container">
                     <label for="image-server-url">圖片伺服器網址:</label>
                     <input type="text" id="image-server-url" />
-                    <!-- <span id="image-server-url-version-placeholder">/v1</span> -->
                     <div id="image-server-url-version-container">
                         <label for="image-server-url-version">圖片伺服器網址版本:</label>
                         <input type="text" id="image-server-url-version" value="v1" />
@@ -115,7 +118,6 @@
             </div>
         </div>
         
-        
         <div id="chat-container"></div>
         <div id="input-container">
             <button id="upload-image-button" onclick="document.getElementById('image-upload').click()">上傳圖片</button>
@@ -125,17 +127,50 @@
         </div>
     </div>
 
-    <!-- Include marked.min.js -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <!-- 引入 DOMPurify -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.0/purify.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
 
     <script>
         let currentConversationId = null;
         let chatHistory = [];
         let isSending = false;
 
-        // Load saved settings from localStorage
+        // Initialize Mermaid configuration
+        mermaid.initialize({
+            startOnLoad: true,
+            securityLevel: 'loose',
+            theme: 'default',
+            flowchart: {
+                useMaxWidth: false,
+                htmlLabels: false,
+                nodeSpacing: 80, // Increase node spacing
+                rankSpacing: 50,  // Increase rank spacing
+                curve: 'linear',  // Use linear curves
+                defaultRenderer: 'dagre-wrapper',
+                defaultStyle: {
+                    fill: '#ffffff',
+                    stroke: '#000000',
+                    strokeWidth: 1.5,
+                    fontSize: 8, // Adjust font size
+                    fontFamily: '"trebuchet ms", verdana, arial',
+                    labelBackground: '#ffffff',
+                    labelStyle: 'fill:#000000;stroke:none;font-size:8px;', // Adjust label font size
+                },
+                styles: {
+                    default: {
+                        fill: '#ffffff',
+                        stroke: '#000000',
+                        strokeWidth: 1.5,
+                        fontSize: 8, // Adjust font size
+                        fontFamily: '"trebuchet ms", verdana, arial',
+                        labelBackground: '#ffffff',
+                        labelStyle: 'fill:#000000;stroke:none;font-size:8px;', // Adjust label font size
+                    },
+                },
+            },
+        });
+
         document.addEventListener('DOMContentLoaded', () => {
             const serverUrl = localStorage.getItem('serverUrl');
             const apiKey = localStorage.getItem('apiKey');
@@ -151,10 +186,8 @@
             if (imageApiKey) document.getElementById('image-api-key').value = imageApiKey;
             if (selectedImageModel) document.getElementById('image-model-select').value = selectedImageModel;
 
-            // Load conversation list
             loadConversationList();
 
-            // Optionally load models if they are saved
             const savedModels = localStorage.getItem('models');
             if (savedModels) {
                 populateModelSelect(JSON.parse(savedModels));
@@ -165,12 +198,10 @@
                 populateImageModelSelect(JSON.parse(savedImageModels));
             }
 
-            // Check if there is an existing conversation to load
             const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
             const conversationIds = Object.keys(conversationList);
 
             if (conversationIds.length > 0) {
-                // Load the first conversation
                 currentConversationId = conversationIds[conversationIds.length - 1];
                 chatHistory = JSON.parse(localStorage.getItem(`conversation-${currentConversationId}`)) || [];
                 chatHistory.forEach(([sender, message]) => {
@@ -178,7 +209,6 @@
                 });
                 markActiveConversation(currentConversationId);
             } else {
-                // Start a new conversation if none exist
                 startNewChat();
             }
         });
@@ -186,18 +216,14 @@
         function startNewChat() {
             if (isSending) return;
 
-            // Generate a new conversation ID using timestamp
             currentConversationId = new Date().toISOString();
             chatHistory = [];
 
-            // Clear chat container
             const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
 
-            // Save new conversation to localStorage
             saveConversation();
 
-            // Add new conversation to the list
             addConversationToList(currentConversationId);
             markActiveConversation(currentConversationId);
         }
@@ -207,24 +233,18 @@
             const conversationListDiv = document.getElementById('conversation-list');
             conversationListDiv.innerHTML = '';
 
-            // Convert conversationList keys to an array and sort in descending order
             const conversationIds = Object.keys(conversationList).sort((a, b) => new Date(b) - new Date(a));
 
             conversationIds.forEach(conversationId => {
                 const chatHistory = JSON.parse(localStorage.getItem(`conversation-${conversationId}`)) || [];
                 const firstMessage = chatHistory.length > 0 ? chatHistory[0][1].substring(0, 14) : '';
                 const conversationItem = document.createElement('div');
-                // conversationItem.innerHTML = `<span>${conversationId}</span><span>${firstMessage}</span><button class="delete-btn" onclick="confirmDeleteConversation('${conversationId}')">X</button>`;
-                const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
-
-                const title = conversationList[conversationId];
+                const title = conversationList[conversationId] || conversationId;
                 conversationItem.innerHTML = `
             <input type="text" value="${title}" onblur="updateConversationTitle(this, '${conversationId}')">
             <span>${firstMessage}</span>
             <button class="delete-btn" onclick="confirmDeleteConversation('${conversationId}')">X</button>
         `;
-                
-
                 conversationItem.onclick = () => loadConversation(conversationId);
                 conversationListDiv.appendChild(conversationItem);
             });
@@ -235,17 +255,17 @@
             conversationList[conversationId] = input.value;
             localStorage.setItem('conversationList', JSON.stringify(conversationList));
         }
+
         function addConversationToList(conversationId) {
             const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
-            conversationList[conversationId] = true;
+            conversationList[conversationId] = conversationId;
             localStorage.setItem('conversationList', JSON.stringify(conversationList));
 
             const conversationListDiv = document.getElementById('conversation-list');
             const conversationItem = document.createElement('div');
-            conversationItem.textContent = conversationId;
             conversationItem.innerHTML = `<span>${conversationId}</span><button class="delete-btn" onclick="confirmDeleteConversation('${conversationId}')">X</button>`;
             conversationItem.onclick = () => loadConversation(conversationId);
-            conversationListDiv.prepend(conversationItem); // Use prepend to add new conversations to the top
+            conversationListDiv.prepend(conversationItem);
         }
 
         function loadConversation(conversationId) {
@@ -254,11 +274,9 @@
             currentConversationId = conversationId;
             chatHistory = JSON.parse(localStorage.getItem(`conversation-${conversationId}`)) || [];
 
-            // Clear chat container
             const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
 
-            // Restore chat history
             chatHistory.forEach(([sender, message]) => {
                 appendMessage(sender, message);
             });
@@ -268,7 +286,6 @@
         async function fetchModels() {
             if (isSending) return;
 
-            // let serverUrl = document.getElementById('server-url').value.trim();
             let serverUrl = document.getElementById('server-url').value.trim();
             const serverUrlVersion = document.getElementById('server-url-version').value.trim();
             const apiKey = document.getElementById('api-key').value.trim();
@@ -278,8 +295,6 @@
                 return;
             }
 
-            // Ensure the server URL ends with "/v1" for the request
-            // const requestUrl = serverUrl.endsWith('/v1') ? serverUrl : `${serverUrl}/v1`;
             const requestUrl = `${serverUrl}/${serverUrlVersion}`;
 
             try {
@@ -294,11 +309,11 @@
                     throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
                 }
                 const data = await response.json();
-                console.log('取得模型的回應內容:', data); // Log the response to the console
+                console.log('取得模型的回應內容:', data);
                 populateModelSelect(data.data);
-                localStorage.setItem('models', JSON.stringify(data.data)); // Save models to localStorage
-                localStorage.setItem('serverUrl', serverUrl); // Save original server URL to localStorage
-                localStorage.setItem('apiKey', apiKey); // Save API key to localStorage
+                localStorage.setItem('models', JSON.stringify(data.data));
+                localStorage.setItem('serverUrl', serverUrl);
+                localStorage.setItem('apiKey', apiKey);
             } catch (error) {
                 console.error('無法取得模型列表:', error);
                 alert(`無法取得模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
@@ -315,7 +330,6 @@
                 modelSelect.appendChild(option);
             });
 
-            // Set the selected model from localStorage if it exists
             const selectedModel = localStorage.getItem('selectedModel');
             if (selectedModel) {
                 modelSelect.value = selectedModel;
@@ -336,11 +350,10 @@
             const serverUrlVersion = document.getElementById('image-server-url-version').value.trim();
 
             if (!serverUrl || !serverUrlVersion || !apiKey) {
-                alert('請填寫圖片伺服器網址、版本和API金鑰。');
+                alert('請填寫所有必要的圖片欄位。');
                 return;
             }
 
-            // Ensure the server URL ends with "/v1" for the request
             const requestUrl = `${serverUrl}/${serverUrlVersion}`;
 
             try {
@@ -355,11 +368,11 @@
                     throw new Error(`HTTP error! status: ${response.status}, message: ${errorMessage}`);
                 }
                 const data = await response.json();
-                console.log('取得圖片模型的回應內容:', data); // Log the response to the console
+                console.log('取得圖片模型的回應內容:', data);
                 populateImageModelSelect(data.data);
-                localStorage.setItem('imageModels', JSON.stringify(data.data)); // Save models to localStorage
-                localStorage.setItem('imageServerUrl', serverUrl); // Save original server URL to localStorage
-                localStorage.setItem('imageApiKey', apiKey); // Save API key to localStorage
+                localStorage.setItem('imageModels', JSON.stringify(data.data));
+                localStorage.setItem('imageServerUrl', serverUrl);
+                localStorage.setItem('imageApiKey', apiKey);
             } catch (error) {
                 console.error('無法取得圖片模型列表:', error);
                 alert(`無法取得圖片模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
@@ -376,7 +389,6 @@
                 modelSelect.appendChild(option);
             });
 
-            // Set the selected model from localStorage if it exists
             const selectedModel = localStorage.getItem('selectedImageModel');
             if (selectedModel) {
                 modelSelect.value = selectedModel;
@@ -404,11 +416,8 @@
                 return;
             }
 
-            // Ensure the server URL ends with "/v1" for the request
-            // const requestUrl = serverUrl.endsWith('/v1') ? serverUrl : `${serverUrl}/v1`;
             const requestUrl = `${serverUrl}/${serverUrlVersion}`;
 
-            // Append user message to chat container and chat history
             appendMessage('user', userMessage);
             chatHistory.push(['user', userMessage]);
             saveConversation();
@@ -419,12 +428,12 @@
             disableUI();
 
             try {
-                console.log('Sending message to:', requestUrl); // Log the request URL
+                console.log('Sending message to:', requestUrl);
                 console.log('Message payload:', {
                     model: modelId,
                     messages: chatHistory.map(([role, content]) => ({ role, content })),
                     stream: true
-                }); // Log the message payload
+                });
 
                 const response = await fetch(`${requestUrl}/chat/completions`, {
                     method: 'POST',
@@ -456,7 +465,7 @@
 
                     const chunk = decoder.decode(value, { stream: true });
                     const lines = (partialLine + chunk).split('\n');
-                    partialLine = lines.pop(); // Keep the last partial line for the next iteration
+                    partialLine = lines.pop();
 
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
@@ -471,13 +480,12 @@
 
                                 if (!assistantMessageElement) {
                                     assistantMessageElement = appendMessage('assistant', '');
-                                    chatHistory.push(['assistant', '']); // Add placeholder for assistant message
+                                    chatHistory.push(['assistant', '']);
                                     saveConversation();
                                 }
 
                                 assistantMessageElement.innerHTML = `<strong>assistant:</strong> ${marked.parse(assistantMessage)}<button class="delete-btn" onclick="confirmDeleteMessage(this)">X</button>`;
 
-                                // Find all code elements and add copy button
                                 const codeElements = assistantMessageElement.querySelectorAll('code');
                                 codeElements.forEach(codeElement => {
                                     const copyButton = document.createElement('button');
@@ -485,9 +493,16 @@
                                     copyButton.textContent = '⎘';
                                     copyButton.onclick = () => copyCode(codeElement);
                                     codeElement.appendChild(copyButton);
+
+                                    if (codeElement.classList.contains('language-mermaid')) {
+                                        const tabButton = document.createElement('button');
+                                        tabButton.className = 'tab-button';
+                                        tabButton.textContent = '↹';
+                                        tabButton.onclick = () => toggleMermaidToSVG(codeElement);
+                                        codeElement.appendChild(tabButton);
+                                    }
                                 });
 
-                                // Update the last assistant message in chat history
                                 chatHistory[chatHistory.length - 1][1] = assistantMessage;
                                 saveConversation();
                             }
@@ -510,7 +525,7 @@
             const reader = new FileReader();
 
             reader.onloadend = async () => {
-                const base64Image = reader.result.split(',')[1]; // Get base64 part
+                const base64Image = reader.result.split(',')[1];
 
                 let serverUrl = document.getElementById('image-server-url').value.trim();
                 const apiKey = document.getElementById('image-api-key').value.trim();
@@ -521,8 +536,6 @@
                     return;
                 }
 
-                // Ensure the server URL ends with "/v1" for the request
-                // const requestUrl = serverUrl.endsWith('/v1') ? serverUrl : `${serverUrl}/v1`;
                 const requestUrl = `${serverUrl}/${serverUrlVersion}`;
 
                 const payload = {
@@ -547,8 +560,8 @@
                 disableUI();
 
                 try {
-                    console.log('Sending image to:', requestUrl); // Log the request URL
-                    console.log('Image payload:', payload); // Log the message payload
+                    console.log('Sending image to:', requestUrl);
+                    console.log('Image payload:', payload);
 
                     const response = await fetch(`${requestUrl}/chat/completions`, {
                         method: 'POST',
@@ -565,7 +578,7 @@
                     }
 
                     const data = await response.json();
-                    console.log('Image response:', data); // Log the response to the console
+                    console.log('Image response:', data);
 
                     const assistantMessage = data.choices[0].message.content;
                     appendMessage('assistant', assistantMessage);
@@ -588,17 +601,13 @@
             const messageElement = document.createElement('div');
 
             if (sender === 'user') {
-                // 使用 DOMPurify 來清理 HTML 輸入
                 const cleanMessage = DOMPurify.sanitize(message);
-
-                //messageElement.innerHTML = `<strong>${sender}:</strong> ${message}`;
                 messageElement.innerHTML = `<strong>${sender}:</strong> <span></span><button class="delete-btn" onclick="confirmDeleteMessage(this)">X</button>`;
                 messageElement.querySelector('span').innerText = message;
             } else {
                 messageElement.innerHTML = `<strong>${sender}:</strong> ${marked.parse(message)}<button class="delete-btn" onclick="confirmDeleteMessage(this)">X</button>`;
             }
 
-            // Find all code elements and add copy button
             const codeElements = messageElement.querySelectorAll('code');
             codeElements.forEach(codeElement => {
                 const copyButton = document.createElement('button');
@@ -606,6 +615,14 @@
                 copyButton.textContent = '⎘';
                 copyButton.onclick = () => copyCode(codeElement);
                 codeElement.appendChild(copyButton);
+
+                if (codeElement.classList.contains('language-mermaid')) {
+                    const tabButton = document.createElement('button');
+                    tabButton.className = 'tab-button';
+                    tabButton.textContent = '↹';
+                    tabButton.onclick = () => toggleMermaidToSVG(codeElement);
+                    codeElement.appendChild(tabButton);
+                }
             });
 
             chatContainer.appendChild(messageElement);
@@ -615,7 +632,7 @@
         }
 
         function copyCode(codeElement) {
-            const textToCopy = codeElement.textContent.replace(/⎘/g, ''); // Remove the copy button text
+            const textToCopy = codeElement.textContent.replace(/⎘|↹/g, '');
             navigator.clipboard.writeText(textToCopy)
                 .then(() => {
                     alert('已複製到剪貼簿！');
@@ -680,7 +697,7 @@
                     const blob = item.getAsFile();
                     const reader = new FileReader();
                     reader.onloadend = async () => {
-                        const base64Image = reader.result.split(',')[1]; // Get base64 part
+                        const base64Image = reader.result.split(',')[1];
                         handlePastedImage(base64Image);
                     };
                     reader.readAsDataURL(blob);
@@ -699,7 +716,6 @@
                 return;
             }
 
-            // Ensure the server URL ends with "/v1" for the request
             const requestUrl = serverUrl.endsWith('/v1') ? serverUrl : `${serverUrl}/v1`;
 
             const payload = {
@@ -724,8 +740,8 @@
             disableUI();
 
             try {
-                console.log('Sending image to:', requestUrl); // Log the request URL
-                console.log('Image payload:', payload); // Log the message payload
+                console.log('Sending image to:', requestUrl);
+                console.log('Image payload:', payload);
 
                 const response = await fetch(`${requestUrl}/chat/completions`, {
                     method: 'POST',
@@ -742,7 +758,7 @@
                 }
 
                 const data = await response.json();
-                console.log('Image response:', data); // Log the response to the console
+                console.log('Image response:', data);
 
                 const assistantMessage = data.choices[0].message.content;
                 appendMessage('assistant', assistantMessage);
@@ -760,7 +776,7 @@
         function markActiveConversation(conversationId) {
             const conversationItems = document.querySelectorAll('#conversation-list div');
             conversationItems.forEach(item => {
-                if (item.textContent.includes(conversationId)) {
+                if (item.querySelector('input').value === conversationId) {
                     item.classList.add('active');
                 } else {
                     item.classList.remove('active');
@@ -800,6 +816,7 @@
             saveConversation();
             messageElement.remove();
         }
+
         function toggleSettingsContainer() {
             const settingsContainer = document.getElementById('settings-container');
             const accordionButton = settingsContainer.querySelector('.accordion-button');
@@ -826,7 +843,46 @@
                 accordionContent.style.display = 'block';
                 accordionButton.textContent = '收起圖片設定';
             }
-        }        
+        }
+
+        async function toggleMermaidToSVG(codeElement) {
+            const mermaidCode = codeElement.cloneNode(true);
+            mermaidCode.querySelectorAll('.copy-button, .tab-button').forEach(btn => btn.remove());
+            const mermaidText = mermaidCode.innerText.trim();
+
+            try {
+                const { svg } = await mermaid.render('mermaid-svg-' + Date.now(), mermaidText);
+
+                // Hide the original code element
+                codeElement.style.display = 'none';
+
+                // Create a new div to hold the SVG
+                const svgContainer = document.createElement('div');
+                svgContainer.innerHTML = svg;
+
+                // Insert the SVG container after the original code element
+                codeElement.parentNode.insertBefore(svgContainer, codeElement.nextSibling);
+
+                // Add a button to switch back to the original code
+                const switchBackButton = document.createElement('button');
+                switchBackButton.className = 'tab-button';
+                switchBackButton.textContent = '↹';
+                switchBackButton.onclick = () => toggleSVGToMermaid(codeElement, svgContainer, switchBackButton);
+                codeElement.parentNode.insertBefore(switchBackButton, codeElement.nextSibling);
+            } catch (error) {
+                console.error('Mermaid rendering failed:', error);
+                alert('Mermaid 圖形轉換失敗，請檢查 Mermaid 語法。');
+            }
+        }
+
+        function toggleSVGToMermaid(codeElement, svgContainer, switchBackButton) {
+            // Show the original code element
+            codeElement.style.display = '';
+
+            // Remove the SVG container and the switch back button
+            svgContainer.remove();
+            switchBackButton.remove();
+        }
     </script>
 </body>
 </html>
