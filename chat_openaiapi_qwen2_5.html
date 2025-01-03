@@ -5,25 +5,143 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OpenAI 相容 API 對話程式</title>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; display: flex; height: 100vh; overflow: hidden; }
-        #sidebar { width: 200px; margin-right: 20px; box-sizing: border-box; }
-        #conversation-list { width: 100%; border: 1px solid #ccc; padding: 10px; height: calc(100vh - 120px); overflow-y: auto; box-sizing: border-box; }
-        #conversation-list div { padding: 5px; cursor: pointer; font-size: 0.5em; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 5px; position: relative; }
-        #conversation-list div:nth-child(even) { background-color: #f9f9f9; }
-        #conversation-list div span { display: block; }
-        #conversation-list div:hover { background-color: #f0f0f0; }
-        #conversation-list div.active { background-color: #ddd; }
-        #conversation-list div .delete-btn { position: absolute; top: 5px; right: 5px; background: none; border: none; color: red; cursor: pointer; font-size: 1.2em; }
-        #main-content { flex: 1; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; }
-        #chat-container { border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; flex: 1; overflow-y: auto; box-sizing: border-box; }
-        #chat-container div { padding: 5px; border: 1px solid #ccc; border-radius: 5px; margin-bottom: 5px; position: relative; }
-        #chat-container div:nth-child(even) { background-color: #f9f9f9; }
-        #chat-container div .delete-btn { position: absolute; top: 5px; right: 5px; background: none; border: none; color: red; cursor: pointer; font-size: 1.2em; }
-        #input-container { display: flex; margin-top: auto; box-sizing: border-box; }
-        #message-input { flex: 1; padding: 5px; margin-right: 5px; resize: vertical; min-height: 50px; box-sizing: border-box; }
-        #send-button { padding: 5px 10px; align-self: flex-end; box-sizing: border-box; }
-        #settings-container { margin-bottom: 10px; box-sizing: border-box; }
-        #model-select { margin-left: 5px; box-sizing: border-box; }
+        body {
+            margin: 0;
+            height: 100vh;
+            display: block;
+            box-sizing: border-box;
+        }
+
+        #sidebar {
+            width: 25%;
+            background-color: #f0f0f0;
+            padding: 10px;
+            box-sizing: border-box;
+            float: left;
+            height: 100vh;
+        }
+
+        #conversation-list {
+            width: 100%;
+            border: 1px solid #ccc;
+            padding: 10px;
+            height: calc(100vh - 60px);
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+
+        #conversation-list div {
+            padding: 5px;
+            cursor: pointer;
+            font-size: 0.9em;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-bottom: 5px;
+            position: relative;
+        }
+
+        #conversation-list div:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        #conversation-list div span {
+            display: block;
+        }
+
+        #conversation-list div:hover {
+            background-color: #f0f0f0;
+        }
+
+        #conversation-list div.active {
+            background-color: #ddd;
+        }
+
+        #conversation-list div .delete-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: none;
+            border: none;
+            color: red;
+            cursor: pointer;
+            font-size: 1.2em;
+        }
+
+        #main-content {
+            width: 75%;
+            padding: 10px;
+            box-sizing: border-box;
+            float: right;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: stretch;
+        }
+
+        #settings-container, #image-settings-container {
+            margin-bottom: 10px;
+            width: 100%;
+        }
+
+        .accordion {
+            margin-bottom: 10px;
+        }
+
+        .accordion-button {
+            background-color: #f0f0f0;
+            padding: 5px 10px;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            text-align: left;
+        }
+
+        .accordion-content {
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            display: none;
+            width: 100%;
+        }
+
+        .accordion-content.show {
+            display: block;
+        }
+
+        #chat-container {
+            width: 100%;
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        #chat-container div {
+            padding: 5px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            margin-bottom: 5px;
+            position: relative;
+        }
+
+        #chat-container div:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+
+        #chat-container div .delete-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: none;
+            border: none;
+            color: red;
+            cursor: pointer;
+            font-size: 1.2em;
+        }
+
         #chat-container code {
             background-color: black;
             color: white;
@@ -34,6 +152,7 @@
             font-family: 'Courier New', Courier, monospace;
             position: relative;
         }
+
         #chat-container code .copy-button {
             position: absolute;
             top: -1em;
@@ -44,6 +163,7 @@
             cursor: pointer;
             font-size: 1.2em;
         }
+
         #chat-container code .tab-button {
             position: absolute;
             top: -1em;
@@ -54,24 +174,65 @@
             cursor: pointer;
             font-size: 1.2em;
         }
-        .accordion {
-            margin-bottom: 10px;
+
+        #input-container {
+            display: flex;
+            flex-direction: row;
+            width: 100%;
+            margin-top: 10px;
+            align-items: flex-end;
         }
-        .accordion-button {
-            background-color: #f0f0f0;
+		
+        #upload-image-button {
+            margin-bottom: 5px;
+        }
+
+        #message-input {
+            flex: 1;
+            padding: 5px;
+            margin-bottom: 5px;
+            resize: vertical;
+            min-height: 50px;
+            box-sizing: border-box;
+        }
+
+        #send-button {
             padding: 5px 10px;
-            border: none;
-            cursor: pointer;
+            align-self: flex-end;
+            box-sizing: border-box;
         }
-        .accordion-content {
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            display: none;
+
+        #model-select, #image-model-select {
+            margin-top: 5px;
+            width: 100%;
+            box-sizing: border-box;
         }
-        .accordion-content.show {
+
+        input[type="text"] {
+            width: 100%;
+            margin-bottom: 5px;
+            padding: 5px;
+            box-sizing: border-box;
+        }
+
+        #api-key, #image-api-key {
+            width: 25%;
+            display: inline-block;
+            vertical-align: top;
+        }
+
+        label {
             display: block;
+            margin-bottom: 5px;
         }
+
+        .key-label {
+            display: inline-block;
+            width: 55%;
+            vertical-align: top;
+            text-align: left;
+        }
+
     </style>
 </head>
 <body>
@@ -137,40 +298,59 @@
         let isSending = false;
 
         // Initialize Mermaid configuration
-        mermaid.initialize({
-            startOnLoad: true,
-            securityLevel: 'loose',
-            theme: 'default',
-            flowchart: {
-                useMaxWidth: false,
-                htmlLabels: false,
-                nodeSpacing: 80, // Increase node spacing
-                rankSpacing: 50,  // Increase rank spacing
-                curve: 'linear',  // Use linear curves
-                defaultRenderer: 'dagre-wrapper',
-                defaultStyle: {
-                    fill: '#ffffff',
-                    stroke: '#000000',
-                    strokeWidth: 1.5,
-                    fontSize: 8, // Adjust font size
-                    fontFamily: '"trebuchet ms", verdana, arial',
-                    labelBackground: '#ffffff',
-                    labelStyle: 'fill:#000000;stroke:none;font-size:8px;', // Adjust label font size
-                },
-                styles: {
-                    default: {
-                        fill: '#ffffff',
-                        stroke: '#000000',
-                        strokeWidth: 1.5,
-                        fontSize: 8, // Adjust font size
-                        fontFamily: '"trebuchet ms", verdana, arial',
-                        labelBackground: '#ffffff',
-                        labelStyle: 'fill:#000000;stroke:none;font-size:8px;', // Adjust label font size
-                    },
-                },
-            },
-        });
+      const ALLOWED_TAGS = [
+        'a',
+        'b',
+        'blockquote',
+        'br',
+        'dd',
+        'div',
+        'dl',
+        'dt',
+        'em',
+        'foreignObject',
+        'h1',
+        'h2',
+        'h3',
+        'h4',
+        'h5',
+        'h6',
+        'h7',
+        'h8',
+        'hr',
+        'i',
+        'li',
+        'ul',
+        'ol',
+        'p',
+        'pre',
+        'span',
+        'strike',
+        'strong',
+        'table',
+        'tbody',
+        'td',
+        'tfoot',
+        'th',
+        'thead',
+        'tr',
+      ];		
+		const mermaidConfig = {
+			startOnLoad: true,
+			securityLevel: 'loose',
 
+
+
+
+
+			flowchart: { htmlLabels: false, curve: 'basis' },
+			gantt: { htmlLabels: false},
+			sequence: { htmlLabels: false, actorMargin: 50 },
+			
+
+		};		
+        mermaid.initialize(mermaidConfig);
+		
         document.addEventListener('DOMContentLoaded', () => {
             const serverUrl = localStorage.getItem('serverUrl');
             const apiKey = localStorage.getItem('apiKey');
@@ -851,14 +1031,16 @@
             const mermaidText = mermaidCode.innerText.trim();
 
             try {
-                const { svg } = await mermaid.render('mermaid-svg-' + Date.now(), mermaidText);
-
                 // Hide the original code element
                 codeElement.style.display = 'none';
 
+		
                 // Create a new div to hold the SVG
                 const svgContainer = document.createElement('div');
+                const { svg } = await mermaid.render('mermaid-svg-' + Date.now(), mermaidText );
                 svgContainer.innerHTML = svg;
+				svgContainer.classList.add = 'container-svg';
+
 
                 // Insert the SVG container after the original code element
                 codeElement.parentNode.insertBefore(svgContainer, codeElement.nextSibling);
