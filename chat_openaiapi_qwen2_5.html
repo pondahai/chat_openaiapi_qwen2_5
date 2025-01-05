@@ -182,7 +182,7 @@
             margin-top: 10px;
             align-items: flex-end;
         }
-		
+                
         #upload-image-button {
             margin-bottom: 5px;
         }
@@ -208,7 +208,7 @@
             box-sizing: border-box;
         }
 
-        input[type="text"] {
+        input[type="text"], textarea {
             width: 100%;
             margin-bottom: 5px;
             padding: 5px;
@@ -231,6 +231,10 @@
             width: 55%;
             vertical-align: top;
             text-align: left;
+        }
+
+        #system-prompt-container {
+            margin-bottom: 10px;
         }
 
     </style>
@@ -279,6 +283,11 @@
             </div>
         </div>
         
+        <div id="system-prompt-container">
+            <label for="system-prompt">System 提示:</label>
+            <textarea id="system-prompt" placeholder="System 提示" rows="4" oninput="updateSystemPrompt()"></textarea>
+        </div>
+        
         <div id="chat-container"></div>
         <div id="input-container">
             <button id="upload-image-button" onclick="document.getElementById('image-upload').click()">上傳圖片</button>
@@ -298,59 +307,52 @@
         let isSending = false;
 
         // Initialize Mermaid configuration
-      const ALLOWED_TAGS = [
-        'a',
-        'b',
-        'blockquote',
-        'br',
-        'dd',
-        'div',
-        'dl',
-        'dt',
-        'em',
-        'foreignObject',
-        'h1',
-        'h2',
-        'h3',
-        'h4',
-        'h5',
-        'h6',
-        'h7',
-        'h8',
-        'hr',
-        'i',
-        'li',
-        'ul',
-        'ol',
-        'p',
-        'pre',
-        'span',
-        'strike',
-        'strong',
-        'table',
-        'tbody',
-        'td',
-        'tfoot',
-        'th',
-        'thead',
-        'tr',
-      ];		
-		const mermaidConfig = {
-			startOnLoad: true,
-			securityLevel: 'loose',
-
-
-
-
-
-			flowchart: { htmlLabels: false, curve: 'basis' },
-			gantt: { htmlLabels: false},
-			sequence: { htmlLabels: false, actorMargin: 50 },
-			
-
-		};		
+        const ALLOWED_TAGS = [
+            'a',
+            'b',
+            'blockquote',
+            'br',
+            'dd',
+            'div',
+            'dl',
+            'dt',
+            'em',
+            'foreignObject',
+            'h1',
+            'h2',
+            'h3',
+            'h4',
+            'h5',
+            'h6',
+            'h7',
+            'h8',
+            'hr',
+            'i',
+            'li',
+            'ul',
+            'ol',
+            'p',
+            'pre',
+            'span',
+            'strike',
+            'strong',
+            'table',
+            'tbody',
+            'td',
+            'tfoot',
+            'th',
+            'thead',
+            'tr',
+        ];              
+        const mermaidConfig = {
+            startOnLoad: true,
+            securityLevel: 'loose',
+            flowchart: { htmlLabels: false, curve: 'basis' },
+            gantt: { htmlLabels: false},
+            sequence: { htmlLabels: false, actorMargin: 50 },
+        };              
         mermaid.initialize(mermaidConfig);
-		
+                
         document.addEventListener('DOMContentLoaded', () => {
             const serverUrl = localStorage.getItem('serverUrl');
             const apiKey = localStorage.getItem('apiKey');
@@ -384,8 +386,12 @@
             if (conversationIds.length > 0) {
                 currentConversationId = conversationIds[conversationIds.length - 1];
                 chatHistory = JSON.parse(localStorage.getItem(`conversation-${currentConversationId}`)) || [];
+                const systemPrompt = chatHistory.find(([sender]) => sender === 'system')?.[1] || '';
+                document.getElementById('system-prompt').value = systemPrompt;
                 chatHistory.forEach(([sender, message]) => {
-                    appendMessage(sender, message);
+                    if (sender !== 'system') {
+                        appendMessage(sender, message);
+                    }
                 });
                 markActiveConversation(currentConversationId);
             } else {
@@ -398,6 +404,11 @@
 
             currentConversationId = new Date().toISOString();
             chatHistory = [];
+
+            const systemPrompt = document.getElementById('system-prompt').value.trim();
+            if (systemPrompt) {
+                chatHistory.push(['system', systemPrompt]);
+            }
 
             const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
@@ -443,7 +454,7 @@
 
             const conversationListDiv = document.getElementById('conversation-list');
             const conversationItem = document.createElement('div');
-            conversationItem.innerHTML = `<span>${conversationId}</span><button class="delete-btn" onclick="confirmDeleteConversation('${conversationId}')">X</button>`;
+            conversationItem.innerHTML = `<input type="text" value="${conversationId}" onblur="updateConversationTitle(this, '${conversationId}')"><span></span><button class="delete-btn" onclick="confirmDeleteConversation('${conversationId}')">X</button>`;
             conversationItem.onclick = () => loadConversation(conversationId);
             conversationListDiv.prepend(conversationItem);
         }
@@ -457,8 +468,13 @@
             const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
 
+            const systemPrompt = chatHistory.find(([sender]) => sender === 'system')?.[1] || '';
+            document.getElementById('system-prompt').value = systemPrompt;
+
             chatHistory.forEach(([sender, message]) => {
-                appendMessage(sender, message);
+                if (sender !== 'system') {
+                    appendMessage(sender, message);
+                }
             });
             markActiveConversation(conversationId);
         }
@@ -784,7 +800,7 @@
                 const cleanMessage = DOMPurify.sanitize(message);
                 messageElement.innerHTML = `<strong>${sender}:</strong> <span></span><button class="delete-btn" onclick="confirmDeleteMessage(this)">X</button>`;
                 messageElement.querySelector('span').innerText = message;
-            } else {
+            } else if (sender === 'assistant') {
                 messageElement.innerHTML = `<strong>${sender}:</strong> ${marked.parse(message)}<button class="delete-btn" onclick="confirmDeleteMessage(this)">X</button>`;
             }
 
@@ -890,13 +906,13 @@
             let serverUrl = document.getElementById('image-server-url').value.trim();
             const apiKey = document.getElementById('image-api-key').value.trim();
             const modelId = document.getElementById('image-model-select').value;
-
+            const serverUrlVersion = document.getElementById('image-server-url-version').value.trim();
             if (!serverUrl || !apiKey || !modelId) {
                 alert('請填寫所有必要的圖片欄位。');
                 return;
             }
 
-            const requestUrl = serverUrl.endsWith('/v1') ? serverUrl : `${serverUrl}/v1`;
+            const requestUrl = `${serverUrl}/${serverUrlVersion}`;
 
             const payload = {
                 messages: [
@@ -953,6 +969,19 @@
             }
         }
 
+        function updateSystemPrompt() {
+            const systemPrompt = document.getElementById('system-prompt').value.trim();
+            const systemIndex = chatHistory.findIndex(([sender]) => sender === 'system');
+
+            if (systemIndex !== -1) {
+                chatHistory[systemIndex][1] = systemPrompt;
+            } else {
+                chatHistory.unshift(['system', systemPrompt]);
+            }
+
+            saveConversation();
+        }
+
         function markActiveConversation(conversationId) {
             const conversationItems = document.querySelectorAll('#conversation-list div');
             conversationItems.forEach(item => {
@@ -978,9 +1007,9 @@
 
             if (conversationId === currentConversationId) {
                 startNewChat();
+            } else {
+                loadConversationList();
             }
-
-            loadConversationList();
         }
 
         function confirmDeleteMessage(button) {
@@ -991,7 +1020,7 @@
 
         function deleteMessage(button) {
             const messageElement = button.parentElement;
-            const index = Array.from(messageElement.parentElement.children).indexOf(messageElement);
+            const index = Array.from(messageElement.parentElement.children).indexOf(messageElement) + 1;
             chatHistory.splice(index, 1);
             saveConversation();
             messageElement.remove();
@@ -1034,13 +1063,11 @@
                 // Hide the original code element
                 codeElement.style.display = 'none';
 
-		
                 // Create a new div to hold the SVG
                 const svgContainer = document.createElement('div');
                 const { svg } = await mermaid.render('mermaid-svg-' + Date.now(), mermaidText );
                 svgContainer.innerHTML = svg;
-				svgContainer.classList.add = 'container-svg';
-
+                svgContainer.classList.add('container-svg');
 
                 // Insert the SVG container after the original code element
                 codeElement.parentNode.insertBefore(svgContainer, codeElement.nextSibling);
