@@ -305,6 +305,8 @@
         let currentConversationId = null;
         let chatHistory = [];
         let isSending = false;
+        // Add at top of script section
+        let messageCounter = 0;
 
         // Initialize Mermaid configuration
         const ALLOWED_TAGS = [
@@ -389,6 +391,9 @@
                 const systemPrompt = chatHistory.find(([sender]) => sender === 'system')?.[1] || '';
                 document.getElementById('system-prompt').value = systemPrompt;
                 chatHistory.forEach(([sender, message]) => {
+                    if(sender === 'system') {
+                        messageCounter += 1;
+                    }
                     if (sender !== 'system') {
                         appendMessage(sender, message);
                     }
@@ -404,8 +409,9 @@
 
             currentConversationId = new Date().toISOString();
             chatHistory = [];
+            messageCounter = 0; // Reset counter for new chat
 
-            const systemPrompt = document.getElementById('system-prompt').value.trim();
+            const systemPrompt = "";
             if (systemPrompt) {
                 chatHistory.push(['system', systemPrompt]);
             }
@@ -417,6 +423,7 @@
 
             addConversationToList(currentConversationId);
             markActiveConversation(currentConversationId);
+            loadConversationList();
         }
 
         function loadConversationList() {
@@ -464,6 +471,7 @@
 
             currentConversationId = conversationId;
             chatHistory = JSON.parse(localStorage.getItem(`conversation-${conversationId}`)) || [];
+            messageCounter = 0; // Reset counter when loading new conversation
 
             const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
@@ -472,6 +480,9 @@
             document.getElementById('system-prompt').value = systemPrompt;
 
             chatHistory.forEach(([sender, message]) => {
+                if(sender === 'system') {
+                    messageCounter += 1;
+                }
                 if (sender !== 'system') {
                     appendMessage(sender, message);
                 }
@@ -614,6 +625,8 @@
 
             const requestUrl = `${serverUrl}/${serverUrlVersion}`;
 
+            // refresh 
+            loadConversation(currentConversationId); 
             appendMessage('user', userMessage);
             chatHistory.push(['user', userMessage]);
             saveConversation();
@@ -680,7 +693,7 @@
                                     saveConversation();
                                 }
 
-                                assistantMessageElement.innerHTML = `<strong>assistant:</strong> ${marked.parse(assistantMessage)}<button class="delete-btn" onclick="confirmDeleteMessage(this)">X</button>`;
+                                assistantMessageElement.innerHTML = `<strong>assistant:</strong> ${marked.parse(assistantMessage)}<button class="delete-btn" onclick="confirmDeleteMessage(${chatHistory.length - 1})">X</button>`;
 
                                 const codeElements = assistantMessageElement.querySelectorAll('code');
                                 codeElements.forEach(codeElement => {
@@ -795,13 +808,14 @@
         function appendMessage(sender, message) {
             const chatContainer = document.getElementById('chat-container');
             const messageElement = document.createElement('div');
+            const currentIndex = messageCounter;
 
             if (sender === 'user') {
                 const cleanMessage = DOMPurify.sanitize(message);
-                messageElement.innerHTML = `<strong>${sender}:</strong> <span></span><button class="delete-btn" onclick="confirmDeleteMessage(this)">X</button>`;
+                messageElement.innerHTML = `<strong>${sender}:</strong> <span></span><button class="delete-btn" onclick="confirmDeleteMessage(${currentIndex})">X</button>`;
                 messageElement.querySelector('span').innerText = message;
             } else if (sender === 'assistant') {
-                messageElement.innerHTML = `<strong>${sender}:</strong> ${marked.parse(message)}<button class="delete-btn" onclick="confirmDeleteMessage(this)">X</button>`;
+                messageElement.innerHTML = `<strong>${sender}:</strong> ${marked.parse(message)}<button class="delete-btn" onclick="confirmDeleteMessage(${currentIndex})">X</button>`;
             }
 
             const codeElements = messageElement.querySelectorAll('code');
@@ -823,6 +837,7 @@
 
             chatContainer.appendChild(messageElement);
             chatContainer.scrollTop = chatContainer.scrollHeight;
+            messageCounter++; // Increment counter after adding message
 
             return messageElement;
         }
@@ -907,7 +922,7 @@
             const apiKey = document.getElementById('image-api-key').value.trim();
             const modelId = document.getElementById('image-model-select').value;
             const serverUrlVersion = document.getElementById('image-server-url-version').value.trim();
-            if (!serverUrl || !apiKey || !modelId) {
+            if (!serverUrl || !serverUrlVersion || !apiKey || !modelId) {
                 alert('請填寫所有必要的圖片欄位。');
                 return;
             }
@@ -1012,18 +1027,16 @@
             }
         }
 
-        function confirmDeleteMessage(button) {
+        function confirmDeleteMessage(index) {
             if (confirm('確定要刪除此訊息嗎？')) {
-                deleteMessage(button);
+                deleteMessage(index);
             }
         }
 
-        function deleteMessage(button) {
-            const messageElement = button.parentElement;
-            const index = Array.from(messageElement.parentElement.children).indexOf(messageElement) + 1;
+        function deleteMessage(index) {
             chatHistory.splice(index, 1);
             saveConversation();
-            messageElement.remove();
+            loadConversation(currentConversationId);
         }
 
         function toggleSettingsContainer() {
