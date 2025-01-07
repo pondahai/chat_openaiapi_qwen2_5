@@ -404,7 +404,7 @@
             }
         });
 
-        function startNewChat() {
+        async function startNewChat() {
             if (isSending) return;
 
             currentConversationId = new Date().toISOString();
@@ -418,15 +418,16 @@
 
             const chatContainer = document.getElementById('chat-container');
             chatContainer.innerHTML = '';
-
+			
             saveConversation();
 
             addConversationToList(currentConversationId);
             markActiveConversation(currentConversationId);
             loadConversationList();
+			loadConversation(currentConversationId);			
         }
 
-        function loadConversationList() {
+        async function loadConversationList() {
             const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
             const conversationListDiv = document.getElementById('conversation-list');
             conversationListDiv.innerHTML = '';
@@ -667,7 +668,7 @@
                 let partialLine = '';
                 let assistantMessage = '';
                 let assistantMessageElement = null;
-
+				
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
@@ -805,7 +806,7 @@
             reader.readAsDataURL(file);
         }
 
-        function appendMessage(sender, message) {
+        async function appendMessage(sender, message) {
             const chatContainer = document.getElementById('chat-container');
             const messageElement = document.createElement('div');
             const currentIndex = messageCounter;
@@ -997,7 +998,7 @@
             saveConversation();
         }
 
-        function markActiveConversation(conversationId) {
+        async function markActiveConversation(conversationId) {
             const conversationItems = document.querySelectorAll('#conversation-list div');
             conversationItems.forEach(item => {
 				const input = item.querySelector('input');
@@ -1015,19 +1016,72 @@
             }
         }
 
-        function deleteConversation(conversationId) {
-            const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
-            delete conversationList[conversationId];
-            localStorage.setItem('conversationList', JSON.stringify(conversationList));
-            localStorage.removeItem(`conversation-${conversationId}`);
-
-            if (conversationId === currentConversationId) {
-                startNewChat();
-            } else {
-                loadConversationList();
-            }
-        }
-
+		async function deleteConversation(conversationId) {
+			try {
+				// 1. 刪除對話
+				const conversationList = JSON.parse(localStorage.getItem('conversationList')) || {};
+				delete conversationList[conversationId];
+				localStorage.setItem('conversationList', JSON.stringify(conversationList));
+				
+				// 2. 等待 DOM 更新完成
+				await new Promise(resolve => requestAnimationFrame(resolve));
+				
+				// 3. 重新載入對話列表
+				await loadConversationList();
+				
+				// 4. 確保 DOM 已更新
+				await new Promise(resolve => requestAnimationFrame(resolve));
+				
+				const updatedList = JSON.parse(localStorage.getItem('conversationList')) || {};
+				const conversationIds = Object.keys(updatedList);
+				
+				if (conversationIds.length > 0) {
+					try {
+						currentConversationId = conversationIds[conversationIds.length - 1];
+						const chatHistory = JSON.parse(localStorage.getItem(`conversation-${currentConversationId}`)) || [];
+						
+						// 5. 更新 system prompt 並等待渲染
+						const systemPrompt = chatHistory.find(([sender]) => sender === 'system')?.[1] || '';
+						const systemPromptElement = document.getElementById('system-prompt');
+						if (systemPromptElement) {
+							systemPromptElement.value = systemPrompt;
+							await new Promise(resolve => requestAnimationFrame(resolve));
+						}
+						
+						// 6. 逐條添加消息，每次都等待渲染完成
+						if (Array.isArray(chatHistory)) {
+							for (const [sender, message] of chatHistory) {
+								if (sender === 'system') {
+									messageCounter += 1;
+									continue;
+								}
+								await appendMessage(sender, message);
+								// 等待消息渲染
+								await new Promise(resolve => setTimeout(resolve, 50));
+							}
+						}
+						
+						// 7. 標記活動對話
+						await new Promise(resolve => {
+							requestAnimationFrame(() => {
+								markActiveConversation(currentConversationId);
+								resolve();
+							});
+						});
+						
+					} catch (error) {
+						console.error('Error loading conversation:', error);
+						await startNewChat();
+					}
+				} else {
+					await startNewChat();
+				}
+			} catch (error) {
+				console.error('Error in deleteConversation:', error);
+			}
+		}
+		
+		
         function confirmDeleteMessage(index) {
             if (confirm('確定要刪除此訊息嗎？')) {
                 deleteMessage(index);
