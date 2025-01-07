@@ -626,7 +626,7 @@
             const requestUrl = `${serverUrl}/${serverUrlVersion}`;
 
             // refresh 
-            loadConversation(currentConversationId); 
+            loadConversation(await currentConversationId); 
             appendMessage('user', userMessage);
             chatHistory.push(['user', userMessage]);
             saveConversation();
