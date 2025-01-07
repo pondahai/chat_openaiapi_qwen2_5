@@ -689,7 +689,7 @@
                                 assistantMessage += deltaContent;
 
                                 if (!assistantMessageElement) {
-                                    assistantMessageElement = appendMessage('assistant', '');
+                                    assistantMessageElement = await appendMessage('assistant', '');
                                     chatHistory.push(['assistant', '']);
                                     saveConversation();
                                 }
