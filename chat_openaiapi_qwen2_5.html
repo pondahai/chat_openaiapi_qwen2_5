@@ -524,7 +524,16 @@
                 localStorage.setItem('apiKey', apiKey);
             } catch (error) {
                 console.error('無法取得模型列表:', error);
-                alert(`無法取得模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+                // alert(`無法取得模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
+                const data = {
+                    data: [
+                        { id: 'default' }
+                    ]
+                };
+                populateModelSelect(data.data);
+                localStorage.setItem('models', JSON.stringify(data.data));
+                localStorage.setItem('serverUrl', serverUrl);
+                localStorage.setItem('apiKey', apiKey);		    
             }
         }
 
@@ -583,16 +592,7 @@
                 localStorage.setItem('imageApiKey', apiKey);
             } catch (error) {
                 console.error('無法取得圖片模型列表:', error);
-                // alert(`無法取得圖片模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
-                const data = {
-                    data: [
-                        { id: 'default' }
-                    ]
-                };
-                populateModelSelect(data.data);
-                localStorage.setItem('models', JSON.stringify(data.data));
-                localStorage.setItem('serverUrl', serverUrl);
-                localStorage.setItem('apiKey', apiKey);		    
+                alert(`無法取得圖片模型列表，請檢查伺服器網址 (${serverUrl}) 和API金鑰 (${apiKey})。\n錯誤訊息: ${error.message}`);
             }
         }
 
