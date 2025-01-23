@@ -300,6 +300,7 @@
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.3.0/purify.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@2.7.9/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
 
     <script>
         let currentConversationId = null;
@@ -509,7 +510,8 @@
                 const response = await fetch(`${requestUrl}/models`, {
                     method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${apiKey}`
+                        'Authorization': `Bearer ${apiKey}`,
+                        'ngrok-skip-browser-warning': 'true' // Add this header to skip the warning page
                     }
                 });
                 if (!response.ok) {
@@ -658,7 +660,8 @@
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true' // Add this header to skip the warning page
                     },
                     body: JSON.stringify({
                         model: modelId,
@@ -677,7 +680,8 @@
                 let partialLine = '';
                 let assistantMessage = '';
                 let assistantMessageElement = null;
-				
+                var temp_div =  document.createElement('div');
+
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
@@ -703,24 +707,47 @@
                                     saveConversation();
                                 }
 
-                                assistantMessageElement.innerHTML = `<strong>assistant:</strong> ${marked.parse(assistantMessage)}<button class="delete-btn" onclick="confirmDeleteMessage(${chatHistory.length - 1})">X</button>`;
+                                temp_div.innerHTML = `<strong>assistant:</strong> ${assistantMessage}<button class="delete-btn" onclick="confirmDeleteMessage(${chatHistory.length - 1})">X</button>`;
+                                MathJax.Hub.Queue(
+                                    ['Typeset', MathJax.Hub, temp_div],
+                                    function() {
+                                        assistantMessageElement.innerHTML = marked.parse(temp_div.innerHTML);
+									   const codeElements = assistantMessageElement.querySelectorAll('code');
+										codeElements.forEach(codeElement => {
+											const copyButton = document.createElement('button');
+											copyButton.className = 'copy-button';
+											copyButton.textContent = '⎘';
+											copyButton.onclick = () => copyCode(codeElement);
+											codeElement.appendChild(copyButton);
 
-                                const codeElements = assistantMessageElement.querySelectorAll('code');
-                                codeElements.forEach(codeElement => {
-                                    const copyButton = document.createElement('button');
-                                    copyButton.className = 'copy-button';
-                                    copyButton.textContent = '⎘';
-                                    copyButton.onclick = () => copyCode(codeElement);
-                                    codeElement.appendChild(copyButton);
-
-                                    if (codeElement.classList.contains('language-mermaid')) {
-                                        const tabButton = document.createElement('button');
-                                        tabButton.className = 'tab-button';
-                                        tabButton.textContent = '↹';
-                                        tabButton.onclick = () => toggleMermaidToSVG(codeElement);
-                                        codeElement.appendChild(tabButton);
+											if (codeElement.classList.contains('language-mermaid')) {
+												const tabButton = document.createElement('button');
+												tabButton.className = 'tab-button';
+												tabButton.textContent = '↹';
+												tabButton.onclick = () => toggleMermaidToSVG(codeElement);
+												codeElement.appendChild(tabButton);
+											}
+										});
                                     }
-                                });
+                                );
+                                // assistantMessageElement.innerHTML = `<strong>assistant:</strong> ${marked.parse(assistantMessage)}<button class="delete-btn" onclick="confirmDeleteMessage(${chatHistory.length - 1})">X</button>`;
+
+                                // const codeElements = assistantMessageElement.querySelectorAll('code');
+                                // codeElements.forEach(codeElement => {
+                                    // const copyButton = document.createElement('button');
+                                    // copyButton.className = 'copy-button';
+                                    // copyButton.textContent = '⎘';
+                                    // copyButton.onclick = () => copyCode(codeElement);
+                                    // codeElement.appendChild(copyButton);
+
+                                    // if (codeElement.classList.contains('language-mermaid')) {
+                                        // const tabButton = document.createElement('button');
+                                        // tabButton.className = 'tab-button';
+                                        // tabButton.textContent = '↹';
+                                        // tabButton.onclick = () => toggleMermaidToSVG(codeElement);
+                                        // codeElement.appendChild(tabButton);
+                                    // }
+                                // });
 
                                 chatHistory[chatHistory.length - 1][1] = assistantMessage;
                                 saveConversation();
@@ -825,25 +852,47 @@
                 messageElement.innerHTML = `<strong>${sender}:</strong> <span></span><button class="delete-btn" onclick="confirmDeleteMessage(${currentIndex})">X</button>`;
                 messageElement.querySelector('span').innerText = message;
             } else if (sender === 'assistant') {
-                messageElement.innerHTML = `<strong>${sender}:</strong> ${marked.parse(message)}<button class="delete-btn" onclick="confirmDeleteMessage(${currentIndex})">X</button>`;
+                messageElement.innerHTML = `<strong>${sender}:</strong> ${message}<button class="delete-btn" onclick="confirmDeleteMessage(${currentIndex})">X</button>`;
+                MathJax.Hub.Queue(
+                    ['Typeset', MathJax.Hub, messageElement],
+                    function() {
+                        messageElement.innerHTML = marked.parse(messageElement.innerHTML);
+                        const codeElements = messageElement.querySelectorAll('code');
+                        codeElements.forEach(codeElement => {
+                            const copyButton = document.createElement('button');
+                            copyButton.className = 'copy-button';
+                            copyButton.textContent = '⎘';
+                            copyButton.onclick = () => copyCode(codeElement);
+                            codeElement.appendChild(copyButton);
+
+                            if (codeElement.classList.contains('language-mermaid')) {
+                                const tabButton = document.createElement('button');
+                                tabButton.className = 'tab-button';
+                                tabButton.textContent = '↹';
+                                tabButton.onclick = () => toggleMermaidToSVG(codeElement);
+                                codeElement.appendChild(tabButton);
+                            }
+                        });
+                    }
+                );
+                // messageElement.innerHTML = `<strong>${sender}:</strong> ${marked.parse(message)}<button class="delete-btn" onclick="confirmDeleteMessage(${currentIndex})">X</button>`;
             }
+            // const codeElements = messageElement.querySelectorAll('code');
+            // codeElements.forEach(codeElement => {
+                // const copyButton = document.createElement('button');
+                // copyButton.className = 'copy-button';
+                // copyButton.textContent = '⎘';
+                // copyButton.onclick = () => copyCode(codeElement);
+                // codeElement.appendChild(copyButton);
 
-            const codeElements = messageElement.querySelectorAll('code');
-            codeElements.forEach(codeElement => {
-                const copyButton = document.createElement('button');
-                copyButton.className = 'copy-button';
-                copyButton.textContent = '⎘';
-                copyButton.onclick = () => copyCode(codeElement);
-                codeElement.appendChild(copyButton);
-
-                if (codeElement.classList.contains('language-mermaid')) {
-                    const tabButton = document.createElement('button');
-                    tabButton.className = 'tab-button';
-                    tabButton.textContent = '↹';
-                    tabButton.onclick = () => toggleMermaidToSVG(codeElement);
-                    codeElement.appendChild(tabButton);
-                }
-            });
+                // if (codeElement.classList.contains('language-mermaid')) {
+                    // const tabButton = document.createElement('button');
+                    // tabButton.className = 'tab-button';
+                    // tabButton.textContent = '↹';
+                    // tabButton.onclick = () => toggleMermaidToSVG(codeElement);
+                    // codeElement.appendChild(tabButton);
+                // }
+            // });
 
             chatContainer.appendChild(messageElement);
             chatContainer.scrollTop = chatContainer.scrollHeight;
