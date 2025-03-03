@@ -308,6 +308,8 @@
         let isSending = false;
         // Add at top of script section
         let messageCounter = 0;
+        // 添加數學公式功能控制變量
+        let enableMathJax = false;
 
         // Initialize Mermaid configuration
         const ALLOWED_TAGS = [
@@ -370,6 +372,8 @@
             if (imageServerUrl) document.getElementById('image-server-url').value = imageServerUrl;
             if (imageApiKey) document.getElementById('image-api-key').value = imageApiKey;
             if (selectedImageModel) document.getElementById('image-model-select').value = selectedImageModel;
+            // 初始化數學公式功能狀態
+            enableMathJax = localStorage.getItem('enableMathJax') === 'true';
 
             loadConversationList();
 
@@ -853,29 +857,20 @@
                 messageElement.querySelector('span').innerText = message;
             } else if (sender === 'assistant') {
                 messageElement.innerHTML = `<strong>${sender}:</strong> ${message}<button class="delete-btn" onclick="confirmDeleteMessage(${currentIndex})">X</button>`;
+            // 根據enableMathJax狀態決定是否處理數學公式
+            if (enableMathJax) {
                 MathJax.Hub.Queue(
                     ['Typeset', MathJax.Hub, messageElement],
                     function() {
                         messageElement.innerHTML = marked.parse(messageElement.innerHTML);
-                        const codeElements = messageElement.querySelectorAll('code');
-                        codeElements.forEach(codeElement => {
-                            const copyButton = document.createElement('button');
-                            copyButton.className = 'copy-button';
-                            copyButton.textContent = '⎘';
-                            copyButton.onclick = () => copyCode(codeElement);
-                            codeElement.appendChild(copyButton);
-
-                            if (codeElement.classList.contains('language-mermaid')) {
-                                const tabButton = document.createElement('button');
-                                tabButton.className = 'tab-button';
-                                tabButton.textContent = '↹';
-                                tabButton.onclick = () => toggleMermaidToSVG(codeElement);
-                                codeElement.appendChild(tabButton);
-                            }
-                        });
+                        addCodeButtons(messageElement);
                     }
                 );
                 // messageElement.innerHTML = `<strong>${sender}:</strong> ${marked.parse(message)}<button class="delete-btn" onclick="confirmDeleteMessage(${currentIndex})">X</button>`;
+            } else {
+                messageElement.innerHTML = marked.parse(messageElement.innerHTML);
+                addCodeButtons(messageElement);
+            }
             }
             // const codeElements = messageElement.querySelectorAll('code');
             // codeElements.forEach(codeElement => {
@@ -900,6 +895,26 @@
 
             return messageElement;
         }
+
+            // 新增輔助函數處理代碼按鈕
+    function addCodeButtons(messageElement) {
+        const codeElements = messageElement.querySelectorAll('code');
+        codeElements.forEach(codeElement => {
+            const copyButton = document.createElement('button');
+            copyButton.className = 'copy-button';
+            copyButton.textContent = '⎘';
+            copyButton.onclick = () => copyCode(codeElement);
+            codeElement.appendChild(copyButton);
+
+            if (codeElement.classList.contains('language-mermaid')) {
+                const tabButton = document.createElement('button');
+                tabButton.className = 'tab-button';
+                tabButton.textContent = '↹';
+                tabButton.onclick = () => toggleMermaidToSVG(codeElement);
+                codeElement.appendChild(tabButton);
+            }
+        });
+    }
 
         function copyCode(codeElement) {
             const textToCopy = codeElement.textContent.replace(/⎘|↹/g, '');
