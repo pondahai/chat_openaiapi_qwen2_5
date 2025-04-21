@@ -193,7 +193,54 @@
             background: #e9f2ff;
         }
 
-        #chat-container div .delete-btn {
+        .msg-action-btn {
+    position: absolute;
+    top: 8px;
+    width: 28px;
+    height: 28px;
+    background: none;
+    border: none;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15em;
+    box-shadow: 0 1px 4px 0 rgba(60,60,60,0.07);
+    color: #888;
+    cursor: pointer;
+    transition: color 0.18s, background 0.18s, transform 0.14s;
+    z-index: 2;
+}
+.msg-action-btn:hover {
+    background: #f1f3f8;
+    color: #222;
+    transform: scale(1.13);
+}
+.delete-btn {
+    right: 8px;
+    color: #e44a4a;
+}
+.delete-btn:hover {
+    background: #ffeaea;
+    color: #b80000;
+}
+.copy-md-btn {
+    right: 44px;
+    color: #4b8cff;
+}
+.copy-md-btn:hover {
+    background: #e9f2ff;
+    color: #0056b3;
+}
+.copy-txt-btn {
+    right: 80px;
+    color: #00b894;
+}
+.copy-txt-btn:hover {
+    background: #eafff3;
+    color: #007a4b;
+}
+
             position: absolute;
             top: 8px;
             right: 8px;
@@ -608,7 +655,7 @@
                 conversationItem.innerHTML = `
             <input type="text" value="${title}" onblur="updateConversationTitle(this, '${conversationId}')">
             <span>${firstMessage}</span>
-            <button class="delete-btn" onclick="confirmDeleteConversation('${conversationId}')">X</button>
+            <button class="msg-action-btn delete-btn" onclick="confirmDeleteConversation('${conversationId}')">X</button>
         `;
                 conversationItem.onclick = () => loadConversation(conversationId);
                 conversationListDiv.appendChild(conversationItem);
@@ -628,7 +675,7 @@
 
             const conversationListDiv = document.getElementById('conversation-list');
             const conversationItem = document.createElement('div');
-            conversationItem.innerHTML = `<input type="text" value="${conversationId}" onblur="updateConversationTitle(this, '${conversationId}')"><span></span><button class="delete-btn" onclick="confirmDeleteConversation('${conversationId}')">X</button>`;
+            conversationItem.innerHTML = `<input type="text" value="${conversationId}" onblur="updateConversationTitle(this, '${conversationId}')"><span></span><button class="msg-action-btn delete-btn" onclick="confirmDeleteConversation('${conversationId}')">X</button>`;
             conversationItem.onclick = () => loadConversation(conversationId);
             conversationListDiv.prepend(conversationItem);
         }
@@ -869,7 +916,7 @@
                                     saveConversation();
                                 }
 
-                                assistantMessageElement.innerHTML = `<strong>assistant:</strong> ${marked.parse(assistantMessage)}<button class="delete-btn" onclick="confirmDeleteMessage(${chatHistory.length - 1})">X</button>`;
+                                assistantMessageElement.innerHTML = `<strong>assistant:</strong> ${marked.parse(assistantMessage)}<button class="msg-action-btn delete-btn" onclick="confirmDeleteMessage(${chatHistory.length - 1})">X</button><button class="msg-action-btn copy-md-btn" title="複製Markdown" onclick="copyMarkdown(${chatHistory.length - 1})">MD</button><button class="msg-action-btn copy-txt-btn" title="複製純文字" onclick="copyPlainText(${chatHistory.length - 1})">TXT</button>`;
 
                                 const codeElements = assistantMessageElement.querySelectorAll('code');
                                 codeElements.forEach(codeElement => {
@@ -987,10 +1034,10 @@
             const currentIndex = messageCounter;
             if (sender === 'user') {
                 const cleanMessage = DOMPurify.sanitize(message);
-                messageElement.innerHTML = `<strong>${sender}:</strong> <span></span><button class="copy-md-btn" onclick="copyMarkdown(${currentIndex})">M⎘</button><button class="copy-txt-btn" onclick="copyPlainText(${currentIndex})">T⎘</button><button class="delete-btn" onclick="confirmDeleteMessage(${currentIndex})">X</button>`;
+                messageElement.innerHTML = `<button class="msg-action-btn delete-btn" onclick="confirmDeleteMessage(${currentIndex})">X</button><button class="msg-action-btn copy-md-btn" title="複製Markdown" onclick="copyMarkdown(${currentIndex})">MD</button><button class="msg-action-btn copy-txt-btn" title="複製純文字" onclick="copyPlainText(${currentIndex})">TXT</button><span></span>`;
                 messageElement.querySelector('span').innerText = message;
             } else if (sender === 'assistant') {
-                messageElement.innerHTML = `<strong>${sender}:</strong> ${marked.parse(message)}<button class="copy-md-btn" onclick="copyMarkdown(${currentIndex})">M⎘</button><button class="copy-txt-btn" onclick="copyPlainText(${currentIndex})">T⎘</button><button class="delete-btn" onclick="confirmDeleteMessage(${currentIndex})">X</button>`;
+                messageElement.innerHTML = `<strong>${sender}:</strong> ${marked.parse(message)}<button class="msg-action-btn delete-btn" onclick="confirmDeleteMessage(${currentIndex})">X</button><button class="msg-action-btn copy-md-btn" title="複製Markdown" onclick="copyMarkdown(${currentIndex})">MD</button><button class="msg-action-btn copy-txt-btn" title="複製純文字" onclick="copyPlainText(${currentIndex})">TXT</button>`;
             }
             const codeElements = messageElement.querySelectorAll('code');
             codeElements.forEach(codeElement => {
