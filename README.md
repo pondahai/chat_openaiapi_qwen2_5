@@ -13,11 +13,13 @@ https://huggingface.co/spaces/Qwen/Qwen2.5-Coder-Artifacts
 可以與大語言模型進行對話  
 並且所有變數與內容都會存放在本機儲存庫  
 每次重新打開這這個網頁程式就會自動載入  
-目前只有一次存放機會  
+~~目前只有一次存放機會~~  
+加入對話歷史紀錄  
 
 chat_openaiapi_qwen2_5.html  
 是最後完成版本  
 其他是過程中的半成品程式  
 
 補充:  
+chat_openaiapi_gpt_4_1.html  
 後來用GPT-4.1接著改良程式  
