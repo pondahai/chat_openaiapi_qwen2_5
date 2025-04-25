@@ -583,7 +583,8 @@
                 const response = await fetch(`${requestUrl}/models`, {
                     method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${apiKey}`
+                        'Authorization': `Bearer ${apiKey}`,
+                        'ngrok-skip-browser-warning': 'true'
                     }
                 });
                 if (!response.ok) {
@@ -817,7 +818,8 @@
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${apiKey}`,
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'ngrok-skip-browser-warning': 'true'
                         },
                         body: JSON.stringify(payload)
                     });
@@ -1032,7 +1034,8 @@
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${apiKey}`,
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
                     },
                     body: JSON.stringify(payload)
                 });
