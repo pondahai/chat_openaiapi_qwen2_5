@@ -18,3 +18,6 @@ https://huggingface.co/spaces/Qwen/Qwen2.5-Coder-Artifacts
 chat_openaiapi_qwen2_5.html  
 是最後完成版本  
 其他是過程中的半成品程式  
+
+補充:  
+後來用GPT-4.1接著改良程式  
