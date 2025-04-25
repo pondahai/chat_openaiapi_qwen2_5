@@ -6,7 +6,7 @@ https://pondahai.github.io/chatbot/chat_openaiapi_gpt_4_1.html
 ![螢幕擷取畫面 2024-11-15 220155](https://github.com/user-attachments/assets/c775f740-2af8-4f7e-8057-6ff9b1c45c2f)  
 ![image](https://github.com/user-attachments/assets/689c4f02-0759-41be-b423-3b279f0c13c5)  
   
-這個程式是我在hunggingface上面使用千問2.5  
+這個程式一開始是我在hunggingface上面使用千問2.5  
 https://huggingface.co/spaces/Qwen/Qwen2.5-Coder-Artifacts  
 以對話方式生成的AI聊天表皮程式  
 這個程式透過設定API網址與金鑰  
